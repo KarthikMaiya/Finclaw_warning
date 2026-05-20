@@ -33,9 +33,37 @@ class SmsReceiver : BroadcastReceiver() {
                     val amountStr = amountMatch?.groupValues?.getOrNull(2) ?: ""
 
                     // 2. Merchant extraction
-                    val merchantRegex = Regex("on\\s([a-zA-Z0-9 ]+)")
-                    val merchantMatch = merchantRegex.find(message)
-                    val merchant = merchantMatch?.groupValues?.getOrNull(1) ?: "Unknown Merchant"
+                    var merchant = "Unknown Merchant"
+
+// Different merchant patterns
+                    val patterns = listOf(
+
+                        Regex("on\\s([a-zA-Z0-9 ]+)"),
+
+                        Regex("at\\s([a-zA-Z0-9 ]+)"),
+
+                        Regex("to\\s([a-zA-Z0-9 ]+)"),
+
+                        Regex("for\\s([a-zA-Z0-9 ]+)")
+                    )
+
+                    for (pattern in patterns) {
+
+                        val match =
+                            pattern.find(message)
+
+                        if (match != null) {
+
+                            merchant =
+
+                                match.groupValues[1]
+                                    .trim()
+
+                            break
+                        }
+                    }
+
+
                     Log.d("FinClawSMS", "MERCHANT: $merchant")
 
                     if (amountStr.isNotEmpty()) {

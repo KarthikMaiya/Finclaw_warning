@@ -170,6 +170,11 @@ fun FinanceGuardianUI(context: Context) {
                     }
                 }
 
+                // ── Quick Demo Simulation ────────────────────────────────────
+                item {
+                    DemoTransactionCard(context = context)
+                }
+
                 // ── Budget Input ─────────────────────────────────────────────
                 item {
                     BudgetInputCard(
@@ -192,17 +197,13 @@ fun FinanceGuardianUI(context: Context) {
                     )
                 }
 
+                // ── Categorical Spending ──────────────────────────────────────
+                item {
+                    CategoryPieChartCard(context = context)
+                }
+
                 // ── Pending Payment ──────────────────────────────────────────
                 if (pendingPayment > 0) {
-                    item {
-
-                        CategoryPieChartCard(
-                            context = context
-                        )
-                    }
-
-
-
                     item {
                         PendingPaymentCard(
                             pendingPayment = pendingPayment,
@@ -778,252 +779,148 @@ fun formatAmount(amount: Int): String {
         else              -> amount.toString()
     }
 }
+
 @Composable
-fun CategoryPieChartCard(
-    context: Context
-) {
+fun DemoTransactionCard(context: Context) {
+    val sharedPreferences = context.getSharedPreferences("FinanceGuardian", Context.MODE_PRIVATE)
 
-    val sharedPreferences =
-
-        context.getSharedPreferences(
-            "FinanceGuardian",
-            Context.MODE_PRIVATE
-        )
-
-    val food =
-        sharedPreferences.getInt(
-            "Food",
-            0
-        )
-
-    val shopping =
-        sharedPreferences.getInt(
-            "Shopping",
-            0
-        )
-
-    val utilities =
-        sharedPreferences.getInt(
-            "Utilities",
-            0
-        )
-
-    val personal =
-        sharedPreferences.getInt(
-            "Personal",
-            0
-        )
-
-    val others =
-        sharedPreferences.getInt(
-            "Others",
-            0
-        )
-
-    val total =
-        food +
-                shopping +
-                utilities +
-                personal +
-                others
-
-    GlassCard(
-        modifier =
-            Modifier.fillMaxWidth()
-    ) {
-
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(
-
-            modifier =
-                Modifier.padding(20.dp)
-
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-
             Text(
-
-                text =
-                    "Categorical Spend",
-
-                fontSize = 18.sp,
-
-                fontWeight =
-                    FontWeight.Bold,
-
-                color =
-                    TextPrimary
+                "Quick Simulation",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
             )
 
-            Spacer(
-                modifier =
-                    Modifier.height(20.dp)
-            )
-
-            if (total == 0) {
-
-                Text(
-
-                    text =
-                        "No spending data yet",
-
-                    color =
-                        TextSecondary
-                )
-
-            } else {
-
-                Canvas(
-
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(220.dp)
-
-                ) {
-
-                    val values = listOf(
-                        food,
-                        shopping,
-                        utilities,
-                        personal,
-                        others
-                    )
-
-                    val colors = listOf(
-                        AccentCyan,
-                        AccentPurple,
-                        AccentAmber,
-                        SafeGreen,
-                        DangerRed
-                    )
-
-                    var startAngle = 0f
-
-                    values.forEachIndexed { index, value ->
-
-                        val sweepAngle =
-
-                            (value.toFloat() /
-                                    total.toFloat()) * 360f
-
-                        drawArc(
-
-                            color =
-                                colors[index],
-
-                            startAngle =
-                                startAngle,
-
-                            sweepAngle =
-                                sweepAngle,
-
-                            useCenter =
-                                true
-                        )
-
-                        startAngle += sweepAngle
-                    }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DemoButton("₹500 Food", SafeGreen, modifier = Modifier.weight(1f)) {
+                    simulateTransaction(sharedPreferences, 500, "Food")
                 }
-
-                Spacer(
-                    modifier =
-                        Modifier.height(20.dp)
-                )
-
-                CategoryLegend(
-                    "Food",
-                    food,
-                    AccentCyan
-                )
-
-                CategoryLegend(
-                    "Shopping",
-                    shopping,
-                    AccentPurple
-                )
-
-                CategoryLegend(
-                    "Utilities",
-                    utilities,
-                    AccentAmber
-                )
-
-                CategoryLegend(
-                    "Personal",
-                    personal,
-                    SafeGreen
-                )
-
-                CategoryLegend(
-                    "Others",
-                    others,
-                    DangerRed
-                )
+                DemoButton("₹2k Shopping", AccentPurple, modifier = Modifier.weight(1f)) {
+                    simulateTransaction(sharedPreferences, 2000, "Shopping")
+                }
             }
         }
     }
 }
+
 @Composable
-fun CategoryLegend(
-    label: String,
-    amount: Int,
-    color: Color
+fun DemoButton(
+    title: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
 ) {
-
-    Row(
-
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-
-        horizontalArrangement =
-            Arrangement.SpaceBetween,
-
-        verticalAlignment =
-            Alignment.CenterVertically
+    Box(
+        modifier = modifier
+            .height(50.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(color.copy(alpha = 0.15f))
+            .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
     ) {
-
-        Row(
-            verticalAlignment =
-                Alignment.CenterVertically
-        ) {
-
-            Box(
-
-                modifier =
-                    Modifier
-                        .size(12.dp)
-                        .background(
-                            color,
-                            CircleShape
-                        )
-            )
-
-            Spacer(
-                modifier =
-                    Modifier.width(8.dp)
-            )
-
-            Text(
-
-                text = label,
-
-                color =
-                    TextPrimary
-            )
-        }
-
         Text(
-
-            text =
-                "₹$amount",
-
-            color =
-                TextSecondary
+            text = title,
+            color = color,
+            fontWeight = FontWeight.Bold
         )
     }
 }
 
+fun simulateTransaction(
+    sharedPreferences: android.content.SharedPreferences,
+    amount: Int,
+    category: String
+) {
+    val currentBalance = sharedPreferences.getInt("CURRENT_BALANCE", 0)
+    val updatedBalance = (currentBalance - amount).coerceAtLeast(0)
 
+    sharedPreferences.edit {
+        putInt("CURRENT_BALANCE", updatedBalance)
+        val previousCategoryAmount = sharedPreferences.getInt(category, 0)
+        putInt(category, previousCategoryAmount + amount)
+    }
+}
 
+@Composable
+fun CategoryPieChartCard(context: Context) {
+    val sharedPreferences = context.getSharedPreferences("FinanceGuardian", Context.MODE_PRIVATE)
+    val food = sharedPreferences.getInt("Food", 0)
+    val shopping = sharedPreferences.getInt("Shopping", 0)
+    val utilities = sharedPreferences.getInt("Utilities", 0)
+    val personal = sharedPreferences.getInt("Personal", 0)
+    val others = sharedPreferences.getInt("Others", 0)
+    val total = food + shopping + utilities + personal + others
 
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = "Categorical Spend",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            if (total == 0) {
+                Text(text = "No spending data yet", color = TextSecondary)
+            } else {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                ) {
+                    val values = listOf(food, shopping, utilities, personal, others)
+                    val colors = listOf(AccentCyan, AccentPurple, AccentAmber, SafeGreen, DangerRed)
+                    var startAngle = 0f
+                    values.forEachIndexed { index, value ->
+                        val sweepAngle = (value.toFloat() / total.toFloat()) * 360f
+                        drawArc(
+                            color = colors[index],
+                            startAngle = startAngle,
+                            sweepAngle = sweepAngle,
+                            useCenter = true
+                        )
+                        startAngle += sweepAngle
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                CategoryLegend("Food", food, AccentCyan)
+                CategoryLegend("Shopping", shopping, AccentPurple)
+                CategoryLegend("Utilities", utilities, AccentAmber)
+                CategoryLegend("Personal", personal, SafeGreen)
+                CategoryLegend("Others", others, DangerRed)
+            }
+        }
+    }
+}
+
+@Composable
+fun CategoryLegend(label: String, amount: Int, color: Color) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .background(color, CircleShape)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(text = label, color = TextPrimary)
+        }
+        Text(text = "₹$amount", color = TextSecondary)
+    }
+}
