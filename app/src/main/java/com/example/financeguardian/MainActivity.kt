@@ -96,11 +96,34 @@ fun FinanceGuardianUI(context: Context) {
 
     // Auto-refresh pending payment from SharedPreferences
     LaunchedEffect(Unit) {
+
         while (true) {
-            pendingPayment = sharedPreferences.getInt("PENDING_PAYMENT", 0)
-            delay(1000)
+
+            pendingPayment =
+                sharedPreferences.getInt(
+                    "PENDING_PAYMENT",
+                    0
+                )
+
+            currentBalance =
+                sharedPreferences.getInt(
+                    "CURRENT_BALANCE",
+                    0
+                )
+
+            totalBudget =
+                sharedPreferences.getInt(
+                    "TOTAL_BUDGET",
+                    0
+                )
+
+            delay(500)
         }
     }
+
+
+
+
 
     val spentAmount         = totalBudget - currentBalance
     val budgetUsagePercent  = if (totalBudget > 0) ((spentAmount.toFloat() / totalBudget.toFloat()) * 100).toInt() else 0
