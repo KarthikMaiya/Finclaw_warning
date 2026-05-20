@@ -1,6 +1,9 @@
 package com.example.financeguardian
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,22 +26,17 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.*
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
-import kotlinx.coroutines.delay
-import com.example.financeguardian.ui.theme.FinanceGuardianTheme
-import android.Manifest
-import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
-import kotlin.math.*
+import com.example.financeguardian.ui.theme.FinanceGuardianTheme
+import kotlinx.coroutines.delay
 
 // ─── Color Palette ────────────────────────────────────────────────────────────
 
 private val BgDeep        = Color(0xFF05070F)
-private val BgCard        = Color(0xFF0D1117)
 private val BgCardAlt     = Color(0xFF0F1520)
 private val AccentBlue    = Color(0xFF00C2FF)
 private val AccentCyan    = Color(0xFF00FFD1)
@@ -58,25 +56,29 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(
-                    Manifest.permission.POST_NOTIFICATIONS
-                ),
-                1
-            )
-        }
+        requestAppPermissions()
         setContent {
             FinanceGuardianTheme {
                 FinanceGuardianUI(this)
             }
+        }
+    }
+
+    private fun requestAppPermissions() {
+        val permissions = mutableListOf(
+            Manifest.permission.RECEIVE_SMS,
+            Manifest.permission.READ_SMS
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        val missingPermissions = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (missingPermissions.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, missingPermissions.toTypedArray(), 1)
         }
     }
 }
@@ -88,9 +90,9 @@ fun FinanceGuardianUI(context: Context) {
     val sharedPreferences = context.getSharedPreferences("FinanceGuardian", Context.MODE_PRIVATE)
 
     var budgetInput    by remember { mutableStateOf("") }
-    var totalBudget    by remember { mutableStateOf(sharedPreferences.getInt("TOTAL_BUDGET", 0)) }
-    var currentBalance by remember { mutableStateOf(sharedPreferences.getInt("CURRENT_BALANCE", 0)) }
-    var pendingPayment by remember { mutableStateOf(sharedPreferences.getInt("PENDING_PAYMENT", 0)) }
+    var totalBudget    by remember { mutableIntStateOf(sharedPreferences.getInt("TOTAL_BUDGET", 0)) }
+    var currentBalance by remember { mutableIntStateOf(sharedPreferences.getInt("CURRENT_BALANCE", 0)) }
+    var pendingPayment by remember { mutableIntStateOf(sharedPreferences.getInt("PENDING_PAYMENT", 0)) }
 
     // Auto-refresh pending payment from SharedPreferences
     LaunchedEffect(Unit) {
@@ -192,6 +194,15 @@ fun FinanceGuardianUI(context: Context) {
 
                 // ── Pending Payment ──────────────────────────────────────────
                 if (pendingPayment > 0) {
+                    item {
+
+                        CategoryPieChartCard(
+                            context = context
+                        )
+                    }
+
+
+
                     item {
                         PendingPaymentCard(
                             pendingPayment = pendingPayment,
@@ -767,3 +778,252 @@ fun formatAmount(amount: Int): String {
         else              -> amount.toString()
     }
 }
+@Composable
+fun CategoryPieChartCard(
+    context: Context
+) {
+
+    val sharedPreferences =
+
+        context.getSharedPreferences(
+            "FinanceGuardian",
+            Context.MODE_PRIVATE
+        )
+
+    val food =
+        sharedPreferences.getInt(
+            "Food",
+            0
+        )
+
+    val shopping =
+        sharedPreferences.getInt(
+            "Shopping",
+            0
+        )
+
+    val utilities =
+        sharedPreferences.getInt(
+            "Utilities",
+            0
+        )
+
+    val personal =
+        sharedPreferences.getInt(
+            "Personal",
+            0
+        )
+
+    val others =
+        sharedPreferences.getInt(
+            "Others",
+            0
+        )
+
+    val total =
+        food +
+                shopping +
+                utilities +
+                personal +
+                others
+
+    GlassCard(
+        modifier =
+            Modifier.fillMaxWidth()
+    ) {
+
+        Column(
+
+            modifier =
+                Modifier.padding(20.dp)
+
+        ) {
+
+            Text(
+
+                text =
+                    "Categorical Spend",
+
+                fontSize = 18.sp,
+
+                fontWeight =
+                    FontWeight.Bold,
+
+                color =
+                    TextPrimary
+            )
+
+            Spacer(
+                modifier =
+                    Modifier.height(20.dp)
+            )
+
+            if (total == 0) {
+
+                Text(
+
+                    text =
+                        "No spending data yet",
+
+                    color =
+                        TextSecondary
+                )
+
+            } else {
+
+                Canvas(
+
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(220.dp)
+
+                ) {
+
+                    val values = listOf(
+                        food,
+                        shopping,
+                        utilities,
+                        personal,
+                        others
+                    )
+
+                    val colors = listOf(
+                        AccentCyan,
+                        AccentPurple,
+                        AccentAmber,
+                        SafeGreen,
+                        DangerRed
+                    )
+
+                    var startAngle = 0f
+
+                    values.forEachIndexed { index, value ->
+
+                        val sweepAngle =
+
+                            (value.toFloat() /
+                                    total.toFloat()) * 360f
+
+                        drawArc(
+
+                            color =
+                                colors[index],
+
+                            startAngle =
+                                startAngle,
+
+                            sweepAngle =
+                                sweepAngle,
+
+                            useCenter =
+                                true
+                        )
+
+                        startAngle += sweepAngle
+                    }
+                }
+
+                Spacer(
+                    modifier =
+                        Modifier.height(20.dp)
+                )
+
+                CategoryLegend(
+                    "Food",
+                    food,
+                    AccentCyan
+                )
+
+                CategoryLegend(
+                    "Shopping",
+                    shopping,
+                    AccentPurple
+                )
+
+                CategoryLegend(
+                    "Utilities",
+                    utilities,
+                    AccentAmber
+                )
+
+                CategoryLegend(
+                    "Personal",
+                    personal,
+                    SafeGreen
+                )
+
+                CategoryLegend(
+                    "Others",
+                    others,
+                    DangerRed
+                )
+            }
+        }
+    }
+}
+@Composable
+fun CategoryLegend(
+    label: String,
+    amount: Int,
+    color: Color
+) {
+
+    Row(
+
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+
+        horizontalArrangement =
+            Arrangement.SpaceBetween,
+
+        verticalAlignment =
+            Alignment.CenterVertically
+    ) {
+
+        Row(
+            verticalAlignment =
+                Alignment.CenterVertically
+        ) {
+
+            Box(
+
+                modifier =
+                    Modifier
+                        .size(12.dp)
+                        .background(
+                            color,
+                            CircleShape
+                        )
+            )
+
+            Spacer(
+                modifier =
+                    Modifier.width(8.dp)
+            )
+
+            Text(
+
+                text = label,
+
+                color =
+                    TextPrimary
+            )
+        }
+
+        Text(
+
+            text =
+                "₹$amount",
+
+            color =
+                TextSecondary
+        )
+    }
+}
+
+
+
+

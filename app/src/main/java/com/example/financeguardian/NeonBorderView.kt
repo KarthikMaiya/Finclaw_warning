@@ -3,12 +3,12 @@ package com.example.financeguardian
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
 import android.view.animation.LinearInterpolator
+import androidx.core.graphics.toColorInt
 
 /**
  * NeonBorderView
@@ -28,21 +28,21 @@ class NeonBorderView @JvmOverloads constructor(
 
     private val outerGlowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style       = Paint.Style.STROKE
-        color       = Color.parseColor("#FF3D5A")   // DangerRed
+        color       = "#FF3D5A".toColorInt()   // DangerRed
         strokeWidth = 40f
         alpha       = 80
     }
 
     private val innerBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style       = Paint.Style.STROKE
-        color       = Color.parseColor("#FF3D5A")
+        color       = "#FF3D5A".toColorInt()
         strokeWidth = 6f
         alpha       = 200
     }
 
     private val cornerAccentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style       = Paint.Style.STROKE
-        color       = Color.parseColor("#FF8FA3")   // lighter red for corner accents
+        color       = "#FF8FA3".toColorInt()   // lighter red for corner accents
         strokeWidth = 10f
         alpha       = 220
     }

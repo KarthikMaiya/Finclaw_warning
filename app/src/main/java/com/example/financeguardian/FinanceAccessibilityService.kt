@@ -35,7 +35,7 @@ private val SUPPORTED_APPS = mapOf(
     "in.swiggy.android"                to "Swiggy",
     "com.application.zomato"           to "Zomato",
     "in.amazon.mShop.android.shopping" to "Amazon",
-    "com.flipkart.android"             to "Flipkart"
+    "com.flipkart.android"             to "Flipkart",
 )
 
 private val PAYMENT_KEYWORDS = listOf(
@@ -107,7 +107,7 @@ class FinanceAccessibilityService : AccessibilityService() {
         AMOUNT_REGEX.findAll(text).forEach { match ->
             val raw     = match.value
             val numeric = parseRupeeAmount(raw)
-            if (numeric > 0 && numeric > parseRupeeAmount(detectedAmount.ifEmpty { "₹0" })) {
+            if (numeric > 0 && (numeric > parseRupeeAmount(detectedAmount.ifEmpty { "₹0" }))) {
                 detectedAmount = raw
                 Log.d(TAG, "Amount candidate: $raw ($numeric)")
             }
@@ -175,7 +175,8 @@ class FinanceAccessibilityService : AccessibilityService() {
             .post(json.toRequestBody("application/json".toMediaType()))
             .build()
 
-        httpClient.newCall(request).enqueue(object : Callback {
+        httpClient.newCall(request).enqueue(
+            object : Callback {
 
             override fun onFailure(call: Call, e: IOException) {
                 Log.e(TAG, "Backend unreachable: ${e.message}")
@@ -231,7 +232,7 @@ class FinanceAccessibilityService : AccessibilityService() {
                 enableLights(true)
                 lightColor = android.graphics.Color.CYAN
             }
-            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
                 .createNotificationChannel(channel)
         }
     }
