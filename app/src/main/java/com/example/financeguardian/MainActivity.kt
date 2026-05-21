@@ -50,6 +50,18 @@ private val GlassStroke   = Color(0x1AFFFFFF)
 private val GlowBlue      = Color(0x3300C2FF)
 private val GlowCyan      = Color(0x2200FFD1)
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+private val CATEGORIES = listOf(
+    "Food", "Shopping", "Transport", "Entertainment",
+    "Health", "Utilities", "Personal", "Others"
+)
+
+private val CATEGORY_COLORS = listOf(
+    AccentCyan, AccentPurple, AccentBlue, AccentAmber,
+    SafeGreen, Color(0xFFF85E9F), Color(0xFF7B5EF8), DangerRed
+)
+
 // ─── Activity ─────────────────────────────────────────────────────────────────
 
 class MainActivity : ComponentActivity() {
@@ -93,37 +105,26 @@ fun FinanceGuardianUI(context: Context) {
     var totalBudget    by remember { mutableIntStateOf(sharedPreferences.getInt("TOTAL_BUDGET", 0)) }
     var currentBalance by remember { mutableIntStateOf(sharedPreferences.getInt("CURRENT_BALANCE", 0)) }
     var pendingPayment by remember { mutableIntStateOf(sharedPreferences.getInt("PENDING_PAYMENT", 0)) }
-
-    // Auto-refresh pending payment from SharedPreferences
+    var transactionHistory by remember { mutableStateOf(sharedPreferences.getString("TRANSACTION_HISTORY", "") ?: "") }
+    
+    // Map to hold category totals
+    val categoryTotals = remember { mutableStateMapOf<String, Int>() }
+    
+    // Auto-refresh all values from SharedPreferences
     LaunchedEffect(Unit) {
-
         while (true) {
-
-            pendingPayment =
-                sharedPreferences.getInt(
-                    "PENDING_PAYMENT",
-                    0
-                )
-
-            currentBalance =
-                sharedPreferences.getInt(
-                    "CURRENT_BALANCE",
-                    0
-                )
-
-            totalBudget =
-                sharedPreferences.getInt(
-                    "TOTAL_BUDGET",
-                    0
-                )
-
-            delay(500)
+            totalBudget = sharedPreferences.getInt("TOTAL_BUDGET", 0)
+            currentBalance = sharedPreferences.getInt("CURRENT_BALANCE", 0)
+            pendingPayment = sharedPreferences.getInt("PENDING_PAYMENT", 0)
+            transactionHistory = sharedPreferences.getString("TRANSACTION_HISTORY", "") ?: ""
+            
+            CATEGORIES.forEach { category ->
+                categoryTotals[category] = sharedPreferences.getInt(category, 0)
+            }
+            
+            delay(1000)
         }
     }
-
-
-
-
 
     val spentAmount         = totalBudget - currentBalance
     val budgetUsagePercent  = if (totalBudget > 0) ((spentAmount.toFloat() / totalBudget.toFloat()) * 100).toInt() else 0
@@ -147,7 +148,6 @@ fun FinanceGuardianUI(context: Context) {
                 .fillMaxSize()
                 .background(BgDeep)
         ) {
-            // Ambient background blobs
             AmbientBackground()
 
             LazyColumn(
@@ -157,13 +157,9 @@ fun FinanceGuardianUI(context: Context) {
             ) {
                 item { Spacer(Modifier.height(56.dp)) }
 
-                // ── Header ──────────────────────────────────────────────────
                 item { HeaderSection() }
-
-                // ── AI Status Bar ────────────────────────────────────────────
                 item { AiStatusBar() }
 
-                // ── Balance Card ─────────────────────────────────────────────
                 item {
                     BalanceCard(
                         totalBudget        = totalBudget,
@@ -174,7 +170,6 @@ fun FinanceGuardianUI(context: Context) {
                     )
                 }
 
-                // ── Analytics Row ────────────────────────────────────────────
                 item {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -193,12 +188,14 @@ fun FinanceGuardianUI(context: Context) {
                     }
                 }
 
-                // ── Quick Demo Simulation ────────────────────────────────────
+                // Quick Demo Simulation
                 item {
-                    DemoTransactionCard(context = context)
+                    DemoTransactionCard(onSimulate = { amount, category ->
+                        simulateTransaction(sharedPreferences, amount, category)
+                    })
                 }
 
-                // ── Budget Input ─────────────────────────────────────────────
+                // Budget Input
                 item {
                     BudgetInputCard(
                         budgetInput = budgetInput,
@@ -207,11 +204,11 @@ fun FinanceGuardianUI(context: Context) {
                             if (budgetInput.isNotEmpty()) {
                                 val addedAmount = budgetInput.toIntOrNull() ?: 0
                                 if (addedAmount > 0) {
-                                    totalBudget    += addedAmount
-                                    currentBalance += addedAmount
+                                    val newTotal = totalBudget + addedAmount
+                                    val newBalance = currentBalance + addedAmount
                                     sharedPreferences.edit {
-                                        putInt("TOTAL_BUDGET",    totalBudget)
-                                        putInt("CURRENT_BALANCE", currentBalance)
+                                        putInt("TOTAL_BUDGET", newTotal)
+                                        putInt("CURRENT_BALANCE", newBalance)
                                     }
                                     budgetInput = ""
                                 }
@@ -220,33 +217,36 @@ fun FinanceGuardianUI(context: Context) {
                     )
                 }
 
-                // ── Categorical Spending ──────────────────────────────────────
+                // Categorical Spending (Pie Chart)
                 item {
-                    CategoryPieChartCard(context = context)
+                    CategoryPieChartCard(categoryTotals = categoryTotals)
+                }
+                
+                // Recent Transactions
+                item {
+                    TransactionHistoryCard(historyString = transactionHistory)
                 }
 
-                // ── Pending Payment ──────────────────────────────────────────
+                // Pending Payment Alert
                 if (pendingPayment > 0) {
-
                     item {
-                        TransactionHistoryCard(
-                            context = context
-                        )
-
                         PendingPaymentCard(
                             pendingPayment = pendingPayment,
                             onYes = {
-                                currentBalance -= pendingPayment
-                                if (currentBalance < 0) currentBalance = 0
+                                val newBalance = (currentBalance - pendingPayment).coerceAtLeast(0)
                                 sharedPreferences.edit {
-                                    putInt("CURRENT_BALANCE", currentBalance)
+                                    putInt("CURRENT_BALANCE", newBalance)
                                     putInt("PENDING_PAYMENT", 0)
+                                    
+                                    // Add to history as "Manual Confirmation"
+                                    val timestamp = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date())
+                                    val newEntry = "Confirmed Payment|₹$pendingPayment|Others|$timestamp\n"
+                                    val existing = sharedPreferences.getString("TRANSACTION_HISTORY", "") ?: ""
+                                    putString("TRANSACTION_HISTORY", newEntry + existing)
                                 }
-                                pendingPayment = 0
                             },
                             onNo = {
                                 sharedPreferences.edit { putInt("PENDING_PAYMENT", 0) }
-                                pendingPayment = 0
                             }
                         )
                     }
@@ -296,23 +296,18 @@ fun AmbientBackground() {
 fun HeaderSection() {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            // Glowing orb logo
             Box(contentAlignment = Alignment.Center) {
                 Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .background(
-                            brush  = Brush.radialGradient(listOf(AccentBlue.copy(alpha = 0.4f), Color.Transparent)),
-                            shape  = CircleShape
-                        )
+                    modifier = Modifier.size(38.dp).background(
+                        brush = Brush.radialGradient(listOf(AccentBlue.copy(alpha = 0.4f), Color.Transparent)),
+                        shape = CircleShape
+                    )
                 )
                 Box(
-                    modifier = Modifier
-                        .size(26.dp)
-                        .background(
-                            brush = Brush.linearGradient(listOf(AccentBlue, AccentCyan)),
-                            shape = CircleShape
-                        )
+                    modifier = Modifier.size(26.dp).background(
+                        brush = Brush.linearGradient(listOf(AccentBlue, AccentCyan)),
+                        shape = CircleShape
+                    )
                 )
             }
             Text(
@@ -369,9 +364,7 @@ fun AiStatusBar() {
 fun StatusChip(label: String, color: Color, dotAlpha: Float) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         Box(
-            modifier = Modifier
-                .size(7.dp)
-                .background(color.copy(alpha = dotAlpha), CircleShape)
+            modifier = Modifier.size(7.dp).background(color.copy(alpha = dotAlpha), CircleShape)
         )
         Text(text = label, fontSize = 11.sp, color = color, fontWeight = FontWeight.SemiBold, letterSpacing = 0.2.sp)
     }
@@ -407,15 +400,11 @@ fun BalanceCard(
             )
             .border(1.dp, GlassStroke, RoundedCornerShape(28.dp))
     ) {
-        // Top accent bar
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(3.dp)
-                .background(
-                    Brush.horizontalGradient(listOf(AccentBlue, AccentCyan, AccentPurple)),
-                    RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-                )
+            modifier = Modifier.fillMaxWidth().height(3.dp).background(
+                Brush.horizontalGradient(listOf(AccentBlue, AccentCyan, AccentPurple)),
+                RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            )
         )
 
         Column(modifier = Modifier.padding(24.dp)) {
@@ -436,7 +425,6 @@ fun BalanceCard(
 
             Spacer(Modifier.height(10.dp))
 
-            // Animated balance
             AnimatedContent(
                 targetState   = currentBalance,
                 transitionSpec = { slideInVertically { -it } + fadeIn() togetherWith slideOutVertically { it } + fadeOut() },
@@ -453,7 +441,6 @@ fun BalanceCard(
 
             Spacer(Modifier.height(20.dp))
 
-            // Progress bar
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(
                     modifier              = Modifier.fillMaxWidth(),
@@ -463,29 +450,18 @@ fun BalanceCard(
                     Text("$budgetUsagePercent% used", fontSize = 12.sp, color = accentColor, fontWeight = FontWeight.SemiBold)
                 }
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(Color(0xFF1E2A40))
+                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF1E2A40))
                 ) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth(animatedProgress)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(accentColor.copy(alpha = 0.7f), accentColor)
-                                )
-                            )
+                        modifier = Modifier.fillMaxWidth(animatedProgress).fillMaxHeight().clip(RoundedCornerShape(3.dp)).background(
+                            Brush.horizontalGradient(listOf(accentColor.copy(alpha = 0.7f), accentColor))
+                        )
                     )
                 }
             }
 
             Spacer(Modifier.height(20.dp))
 
-            // Budget / Spent row
             Row(
                 modifier              = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -534,7 +510,6 @@ fun RiskMeterCard(modifier: Modifier = Modifier, budgetUsagePercent: Int, riskLe
                     val stroke    = 10f
                     val inset     = stroke / 2
                     val startAngle = 150f
-                    // Track
                     drawArc(
                         color      = Color(0xFF1E2A40),
                         startAngle = startAngle,
@@ -544,7 +519,6 @@ fun RiskMeterCard(modifier: Modifier = Modifier, budgetUsagePercent: Int, riskLe
                         topLeft    = Offset(inset, inset),
                         size       = this.size.copy(width = this.size.width - stroke, height = this.size.height - stroke)
                     )
-                    // Fill
                     drawArc(
                         brush      = Brush.sweepGradient(listOf(SafeGreen, AccentAmber, DangerRed)),
                         startAngle = startAngle,
@@ -590,11 +564,7 @@ fun SpendingUsageCard(modifier: Modifier = Modifier, budgetUsagePercent: Int, sp
             )
             Spacer(Modifier.height(4.dp))
             MiniBarChart(percent = budgetUsagePercent)
-            Text(
-                text      = "of budget used",
-                fontSize  = 11.sp,
-                color     = TextSecondary
-            )
+            Text(text = "of budget used", fontSize = 11.sp, color = TextSecondary)
         }
     }
 }
@@ -612,18 +582,10 @@ fun MiniBarChart(percent: Int) {
         else          -> SafeGreen
     }
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(5.dp)
-            .clip(RoundedCornerShape(2.5.dp))
-            .background(Color(0xFF1E2A40))
+        modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(2.5.dp)).background(Color(0xFF1E2A40))
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth(animatedWidth)
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(2.5.dp))
-                .background(barColor)
+            modifier = Modifier.fillMaxWidth(animatedWidth).fillMaxHeight().clip(RoundedCornerShape(2.5.dp)).background(barColor)
         )
     }
 }
@@ -638,11 +600,7 @@ fun BudgetInputCard(budgetInput: String, onInputChange: (String) -> Unit, onUpda
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .background(AccentCyan, CircleShape)
-                )
+                Box(modifier = Modifier.size(8.dp).background(AccentCyan, CircleShape))
                 Text("Add Salary / Adjust Budget", fontSize = 14.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold)
             }
 
@@ -666,25 +624,13 @@ fun BudgetInputCard(budgetInput: String, onInputChange: (String) -> Unit, onUpda
                 textStyle = LocalTextStyle.current.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             )
 
-            // Neon button
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        Brush.horizontalGradient(listOf(AccentBlue, AccentCyan))
-                    )
+                modifier = Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(16.dp))
+                    .background(Brush.horizontalGradient(listOf(AccentBlue, AccentCyan)))
                     .clickable { onUpdate() },
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text       = "Update Budget",
-                    fontSize   = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color      = BgDeep,
-                    letterSpacing = 0.3.sp
-                )
+                Text(text = "Update Budget", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = BgDeep)
             }
         }
     }
@@ -702,71 +648,34 @@ fun PendingPaymentCard(pendingPayment: Int, onYes: () -> Unit, onNo: () -> Unit)
     )
 
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(Color(0xFF150A10))
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Color(0xFF150A10))
             .border(1.5.dp, DangerRed.copy(alpha = glowAlpha + 0.2f), RoundedCornerShape(24.dp))
     ) {
-        // Red glow top bar
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(3.dp)
-                .background(
-                    Brush.horizontalGradient(listOf(DangerRed.copy(alpha = 0.6f), DangerRed, DangerRed.copy(alpha = 0.6f))),
-                    RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-                )
+            modifier = Modifier.fillMaxWidth().height(3.dp).background(
+                Brush.horizontalGradient(listOf(DangerRed.copy(alpha = 0.6f), DangerRed, DangerRed.copy(alpha = 0.6f))),
+                RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+            )
         )
 
         Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .background(DangerRed.copy(alpha = glowAlpha + 0.4f), CircleShape)
-                )
-                Text("Pending Payment", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DangerRed, letterSpacing = 0.3.sp)
+                Box(modifier = Modifier.size(10.dp).background(DangerRed.copy(alpha = glowAlpha + 0.4f), CircleShape))
+                Text("Pending Payment", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DangerRed)
             }
 
-            Text(
-                text       = "₹${formatAmount(pendingPayment)}",
-                fontSize   = 40.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color      = TextPrimary
-            )
-
-            Text(
-                text     = "OpenClaw AI detected a payment. Did you complete this transaction?",
-                fontSize = 13.sp,
-                color    = TextSecondary,
-                lineHeight = 19.sp
-            )
-
-            Spacer(Modifier.height(4.dp))
+            Text(text = "₹${formatAmount(pendingPayment)}", fontSize = 40.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
+            Text(text = "OpenClaw AI detected a payment. Did you complete this transaction?", fontSize = 13.sp, color = TextSecondary, lineHeight = 19.sp)
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                // YES
                 Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(DangerRed)
-                        .clickable { onYes() },
+                    modifier = Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp)).background(DangerRed).clickable { onYes() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text("YES, PAID", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
                 }
-                // NO
                 Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Color(0xFF1E2030))
-                        .border(1.dp, GlassStroke, RoundedCornerShape(14.dp))
-                        .clickable { onNo() },
+                    modifier = Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF1E2030)).border(1.dp, GlassStroke, RoundedCornerShape(14.dp)).clickable { onNo() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text("NO, SKIP", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
@@ -776,222 +685,97 @@ fun PendingPaymentCard(pendingPayment: Int, onYes: () -> Unit, onNo: () -> Unit)
     }
 }
 
-// ─── Reusable Glass Card ──────────────────────────────────────────────────────
+// ─── Demo Simulation ──────────────────────────────────────────────────────────
 
 @Composable
-fun GlassCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(22.dp))
-            .background(BgCardAlt)
-            .border(1.dp, GlassStroke, RoundedCornerShape(22.dp))
-    ) {
-        content()
-    }
-}
-
-// ─── Risk Level Enum ──────────────────────────────────────────────────────────
-
-enum class RiskLevel(val label: String, val color: Color) {
-    SAFE("Safe",    SafeGreen),
-    CAUTION("Caution", AccentAmber),
-    DANGER("Danger", DangerRed)
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-fun formatAmount(amount: Int): String {
-    return when {
-        amount >= 100_000 -> "%.1fL".format(amount / 100_000f)
-        amount >= 1_000   -> "%.1fK".format(amount / 1_000f)
-        else              -> amount.toString()
-    }
-}
-
-@Composable
-fun DemoTransactionCard(context: Context) {
-    val sharedPreferences = context.getSharedPreferences("FinanceGuardian", Context.MODE_PRIVATE)
-
+fun DemoTransactionCard(onSimulate: (Int, String) -> Unit) {
     GlassCard(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Text(
-                "Quick Simulation",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
-            )
-
+        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("Quick Simulation", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DemoButton("₹500 Food", SafeGreen, modifier = Modifier.weight(1f)) {
-                    simulateTransaction(sharedPreferences, 500, "Food")
-                }
-                DemoButton("₹2k Shopping", AccentPurple, modifier = Modifier.weight(1f)) {
-                    simulateTransaction(sharedPreferences, 2000, "Shopping")
-                }
+                DemoButton("₹450 Food", AccentCyan, modifier = Modifier.weight(1f)) { onSimulate(450, "Food") }
+                DemoButton("₹899 Shop", AccentPurple, modifier = Modifier.weight(1f)) { onSimulate(899, "Shopping") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DemoButton("₹1200 Health", SafeGreen, modifier = Modifier.weight(1f)) { onSimulate(1200, "Health") }
+                DemoButton("₹300 Util", AccentAmber, modifier = Modifier.weight(1f)) { onSimulate(300, "Utilities") }
             }
         }
     }
 }
 
 @Composable
-fun DemoButton(
-    title: String,
-    color: Color,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
+fun DemoButton(title: String, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
-        modifier = modifier
-            .height(50.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(color.copy(alpha = 0.15f))
-            .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
-            .clickable { onClick() },
+        modifier = modifier.height(44.dp).clip(RoundedCornerShape(12.dp)).background(color.copy(alpha = 0.15f))
+            .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(12.dp)).clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = title,
-            color = color,
-            fontWeight = FontWeight.Bold
-        )
+        Text(text = title, color = color, fontWeight = FontWeight.Bold, fontSize = 12.sp)
     }
 }
 
-fun simulateTransaction(
-    sharedPreferences: android.content.SharedPreferences,
-    amount: Int,
-    category: String
-) {
+fun simulateTransaction(sharedPreferences: android.content.SharedPreferences, amount: Int, category: String) {
     val currentBalance = sharedPreferences.getInt("CURRENT_BALANCE", 0)
     val updatedBalance = (currentBalance - amount).coerceAtLeast(0)
 
     sharedPreferences.edit {
         putInt("CURRENT_BALANCE", updatedBalance)
-        val previousCategoryAmount = sharedPreferences.getInt(category, 0)
-        putInt(category, previousCategoryAmount + amount)
+        val prev = sharedPreferences.getInt(category, 0)
+        putInt(category, prev + amount)
+        
+        // Add to history
+        val timestamp = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date())
+        val newEntry = "Demo Spend|₹$amount|$category|$timestamp\n"
+        val existing = sharedPreferences.getString("TRANSACTION_HISTORY", "") ?: ""
+        putString("TRANSACTION_HISTORY", newEntry + existing)
     }
 }
 
+// ─── Analytics (Pie Chart) ────────────────────────────────────────────────────
+
 @Composable
-fun CategoryPieChartCard(context: Context) {
-    val sharedPreferences = context.getSharedPreferences("FinanceGuardian", Context.MODE_PRIVATE)
-    var food by remember {
-
-        mutableStateOf(0)
-    }
-
-    var shopping by remember {
-
-        mutableStateOf(0)
-    }
-
-    var utilities by remember {
-
-        mutableStateOf(0)
-    }
-
-    var personal by remember {
-
-        mutableStateOf(0)
-    }
-
-    var others by remember {
-
-        mutableStateOf(0)
-    }
-
-    LaunchedEffect(Unit) {
-
-        while (true) {
-
-            food =
-
-                sharedPreferences.getInt(
-                    "Food",
-                    0
-                )
-
-            shopping =
-
-                sharedPreferences.getInt(
-                    "Shopping",
-                    0
-                )
-
-            utilities =
-
-                sharedPreferences.getInt(
-                    "Utilities",
-                    0
-                )
-
-            personal =
-
-                sharedPreferences.getInt(
-                    "Personal",
-                    0
-                )
-
-            others =
-
-                sharedPreferences.getInt(
-                    "Others",
-                    0
-                )
-
-            delay(500)
-        }
-    }
-
-
-
-
-    val total = food + shopping + utilities + personal + others
+fun CategoryPieChartCard(categoryTotals: Map<String, Int>) {
+    val totalSpend = categoryTotals.values.sum()
 
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                text = "Categorical Spend",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
-            )
+            Text("Categorical Spend", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Spacer(Modifier.height(20.dp))
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            if (total == 0) {
-                Text(text = "No spending data yet", color = TextSecondary)
+            if (totalSpend == 0) {
+                Text("No spending data yet", color = TextSecondary, fontSize = 14.sp)
             } else {
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(220.dp)
-                ) {
-                    val values = listOf(food, shopping, utilities, personal, others)
-                    val colors = listOf(AccentCyan, AccentPurple, AccentAmber, SafeGreen, DangerRed)
-                    var startAngle = 0f
-                    values.forEachIndexed { index, value ->
-                        val sweepAngle = (value.toFloat() / total.toFloat()) * 360f
-                        drawArc(
-                            color = colors[index],
-                            startAngle = startAngle,
-                            sweepAngle = sweepAngle,
-                            useCenter = true
-                        )
-                        startAngle += sweepAngle
+                Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                    Canvas(modifier = Modifier.size(180.dp)) {
+                        var startAngle = 0f
+                        CATEGORIES.forEachIndexed { index, category ->
+                            val amount = categoryTotals[category] ?: 0
+                            if (amount > 0) {
+                                val sweepAngle = (amount.toFloat() / totalSpend.toFloat()) * 360f
+                                drawArc(
+                                    color = CATEGORY_COLORS.getOrElse(index) { Color.Gray },
+                                    startAngle = startAngle,
+                                    sweepAngle = sweepAngle,
+                                    useCenter = true
+                                )
+                                startAngle += sweepAngle
+                            }
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(Modifier.height(24.dp))
 
-                CategoryLegend("Food", food, AccentCyan)
-                CategoryLegend("Shopping", shopping, AccentPurple)
-                CategoryLegend("Utilities", utilities, AccentAmber)
-                CategoryLegend("Personal", personal, SafeGreen)
-                CategoryLegend("Others", others, DangerRed)
+                // Legend
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CATEGORIES.forEachIndexed { index, category ->
+                        val amount = categoryTotals[category] ?: 0
+                        if (amount > 0) {
+                            CategoryLegend(category, amount, CATEGORY_COLORS.getOrElse(index) { Color.Gray })
+                        }
+                    }
+                }
             }
         }
     }
@@ -1000,134 +784,43 @@ fun CategoryPieChartCard(context: Context) {
 @Composable
 fun CategoryLegend(label: String, amount: Int, color: Color) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .background(color, CircleShape)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text = label, color = TextPrimary)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(modifier = Modifier.size(10.dp).background(color, CircleShape))
+            Text(text = label, color = TextPrimary, fontSize = 14.sp)
         }
-        Text(text = "₹$amount", color = TextSecondary)
+        Text(text = "₹$amount", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
     }
 }
+
+// ─── Transaction History ──────────────────────────────────────────────────────
+
 @Composable
-fun TransactionHistoryCard(
-    context: Context
-) {
+fun TransactionHistoryCard(historyString: String) {
+    val transactionList = historyString.split("\n").filter { it.isNotEmpty() }
 
-    val sharedPreferences =
-
-        context.getSharedPreferences(
-            "FinanceGuardian",
-            Context.MODE_PRIVATE
-        )
-
-    var transactions by remember {
-
-        mutableStateOf("")
-    }
-
-    LaunchedEffect(Unit) {
-
-        while (true) {
-
-            transactions =
-
-                sharedPreferences.getString(
-                    "TRANSACTION_HISTORY",
-                    ""
-                ) ?: ""
-
-            delay(500)
-        }
-    }
-
-    val transactionList =
-
-        transactions
-
-            .split("\n")
-
-            .filter {
-
-                it.isNotEmpty()
-            }
-
-    GlassCard(
-
-        modifier =
-            Modifier.fillMaxWidth()
-
-    ) {
-
-        Column(
-
-            modifier =
-                Modifier.padding(20.dp)
-
-        ) {
-
-            Text(
-
-                text =
-                    "Recent Transactions",
-
-                fontSize = 18.sp,
-
-                fontWeight =
-                    FontWeight.Bold,
-
-                color =
-                    TextPrimary
-            )
-
-            Spacer(
-                modifier =
-                    Modifier.height(16.dp)
-            )
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text("Recent Transactions", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Spacer(Modifier.height(16.dp))
 
             if (transactionList.isEmpty()) {
-
-                Text(
-
-                    text =
-                        "No transactions yet",
-
-                    color =
-                        TextSecondary
-                )
-
+                Text("No transactions yet", color = TextSecondary, fontSize = 14.sp)
             } else {
-
-                transactionList.take(10).forEach {
-
-                    val parts =
-                        it.split("|")
-
-                    if (parts.size >= 4) {
-
-                        TransactionItem(
-
-                            merchant =
-                                parts[0],
-
-                            amount =
-                                parts[1],
-
-                            category =
-                                parts[2],
-
-                            time =
-                                parts[3]
-                        )
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    transactionList.take(5).forEach { entry ->
+                        val parts = entry.split("|")
+                        if (parts.size >= 4) {
+                            TransactionItem(
+                                merchant = parts[0],
+                                amount   = parts[1],
+                                category = parts[2],
+                                time     = parts[3]
+                            )
+                        }
                     }
                 }
             }
@@ -1136,69 +829,39 @@ fun TransactionHistoryCard(
 }
 
 @Composable
-fun TransactionItem(
-
-    merchant: String,
-
-    amount: String,
-
-    category: String,
-
-    time: String
-) {
-
+fun TransactionItem(merchant: String, amount: String, category: String, time: String) {
     Row(
-
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = 10.dp),
-
-        horizontalArrangement =
-            Arrangement.SpaceBetween,
-
-        verticalAlignment =
-            Alignment.CenterVertically
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-
-        Column {
-
-            Text(
-
-                text =
-                    merchant,
-
-                color =
-                    TextPrimary,
-
-                fontWeight =
-                    FontWeight.Bold
-            )
-
-            Text(
-
-                text =
-                    "$category • $time",
-
-                color =
-                    TextSecondary,
-
-                fontSize =
-                    12.sp
-            )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = merchant, color = TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text = "$category • $time", color = TextSecondary, fontSize = 12.sp)
         }
-
-        Text(
-
-            text =
-                amount,
-
-            color =
-                DangerRed,
-
-            fontWeight =
-                FontWeight.Bold
-        )
+        Text(text = amount, color = DangerRed, fontWeight = FontWeight.Bold)
     }
 }
 
+// ─── Reusable Glass Card ──────────────────────────────────────────────────────
+
+@Composable
+fun GlassCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Box(
+        modifier = modifier.clip(RoundedCornerShape(22.dp)).background(BgCardAlt).border(1.dp, GlassStroke, RoundedCornerShape(22.dp))
+    ) {
+        content()
+    }
+}
+
+enum class RiskLevel(val label: String, val color: Color) {
+    SAFE("Safe", SafeGreen), CAUTION("Caution", AccentAmber), DANGER("Danger", DangerRed)
+}
+
+fun formatAmount(amount: Int): String {
+    return when {
+        amount >= 100_000 -> "%.1fL".format(amount / 100_000f)
+        amount >= 1_000   -> "%.1fK".format(amount / 1_000f)
+        else              -> amount.toString()
+    }
+}
