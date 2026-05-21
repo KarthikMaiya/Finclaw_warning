@@ -32,8 +32,12 @@ import androidx.compose.ui.unit.*
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.compose.ui.composed
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import com.example.financeguardian.ui.theme.FinanceGuardianTheme
 import kotlinx.coroutines.delay
+
 
 // ─── Color Palette ────────────────────────────────────────────────────────────
 
@@ -275,34 +279,73 @@ fun FinanceGuardianUI(context: Context) {
     }
 }
 
+// ─── bounceClick Extension Modifier ──────────────────────────────────────────
+
+fun Modifier.bounceClick() = composed {
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "bounce"
+    )
+    
+    this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .pointerInput(Unit) {
+            detectTapGestures(
+                onPress = {
+                    isPressed = true
+                    tryAwaitRelease()
+                    isPressed = false
+                }
+            )
+        }
+}
+
 // ─── Ambient Background ───────────────────────────────────────────────────────
 
 @Composable
 fun AmbientBackground() {
     val infiniteTransition = rememberInfiniteTransition(label = "ambient")
     val pulse by infiniteTransition.animateFloat(
-        initialValue = 0.6f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(4000, easing = EaseInOut), RepeatMode.Reverse),
+        initialValue = 0.7f, targetValue = 1.1f,
+        animationSpec = infiniteRepeatable(tween(6000, easing = EaseInOut), RepeatMode.Reverse),
         label = "pulse"
     )
+    
+    val driftX by infiniteTransition.animateFloat(
+        initialValue = -80f, targetValue = 80f,
+        animationSpec = infiniteRepeatable(tween(10000, easing = EaseInOut), RepeatMode.Reverse),
+        label = "driftX"
+    )
+    
+    val driftY by infiniteTransition.animateFloat(
+        initialValue = -50f, targetValue = 50f,
+        animationSpec = infiniteRepeatable(tween(8000, easing = EaseInOut), RepeatMode.Reverse),
+        label = "driftY"
+    )
+
     Canvas(modifier = Modifier.fillMaxSize()) {
         drawCircle(
-            brush  = Brush.radialGradient(listOf(GlowBlue, Color.Transparent), radius = size.width * 0.7f),
-            radius = size.width * 0.55f * pulse,
-            center = Offset(size.width * 0.85f, size.height * 0.12f),
-            alpha  = 0.5f
+            brush  = Brush.radialGradient(listOf(GlowBlue, Color.Transparent), radius = size.width * 0.8f),
+            radius = size.width * 0.6f * pulse,
+            center = Offset(size.width * 0.85f + driftX, size.height * 0.12f + driftY),
+            alpha  = 0.45f
         )
         drawCircle(
-            brush  = Brush.radialGradient(listOf(GlowCyan, Color.Transparent), radius = size.width * 0.5f),
+            brush  = Brush.radialGradient(listOf(GlowCyan, Color.Transparent), radius = size.width * 0.6f),
+            radius = size.width * 0.45f * pulse,
+            center = Offset(size.width * 0.1f - driftX, size.height * 0.55f - driftY),
+            alpha  = 0.35f
+        )
+        drawCircle(
+            brush  = Brush.radialGradient(listOf(Color(0x157B5EF8), Color.Transparent), radius = size.width * 0.5f),
             radius = size.width * 0.4f * pulse,
-            center = Offset(size.width * 0.1f, size.height * 0.55f),
-            alpha  = 0.4f
-        )
-        drawCircle(
-            brush  = Brush.radialGradient(listOf(Color(0x1A7B5EF8), Color.Transparent), radius = size.width * 0.4f),
-            radius = size.width * 0.35f,
-            center = Offset(size.width * 0.5f, size.height * 0.88f),
-            alpha  = 0.6f
+            center = Offset(size.width * 0.5f + driftX * 0.5f, size.height * 0.88f + driftY * 0.5f),
+            alpha  = 0.5f
         )
     }
 }
@@ -311,37 +354,48 @@ fun AmbientBackground() {
 
 @Composable
 fun HeaderSection() {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically, 
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             Box(contentAlignment = Alignment.Center) {
                 Box(
-                    modifier = Modifier.size(38.dp).background(
-                        brush = Brush.radialGradient(listOf(AccentBlue.copy(alpha = 0.4f), Color.Transparent)),
-                        shape = CircleShape
-                    )
+                    modifier = Modifier
+                        .size(42.dp)
+                        .background(
+                            brush = Brush.radialGradient(listOf(AccentBlue.copy(alpha = 0.5f), Color.Transparent)),
+                            shape = CircleShape
+                        )
                 )
                 Box(
-                    modifier = Modifier.size(26.dp).background(
-                        brush = Brush.linearGradient(listOf(AccentBlue, AccentCyan)),
-                        shape = CircleShape
-                    )
+                    modifier = Modifier
+                        .size(28.dp)
+                        .background(
+                            brush = Brush.linearGradient(listOf(AccentBlue, AccentCyan)),
+                            shape = CircleShape
+                        )
                 )
             }
             Text(
                 text       = "FinClaw",
-                fontSize   = 26.sp,
+                fontSize   = 28.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color      = TextPrimary,
-                letterSpacing = 0.3.sp
+                letterSpacing = 0.4.sp
             )
             Text(
                 text       = "AI",
-                fontSize   = 16.sp,
+                fontSize   = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color      = AccentCyan,
                 modifier   = Modifier
-                    .background(AccentCyan.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .background(
+                        brush = Brush.linearGradient(listOf(AccentCyan.copy(alpha = 0.2f), AccentBlue.copy(alpha = 0.1f))),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .border(0.8.dp, AccentCyan.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
             )
         }
         Text(
@@ -359,14 +413,14 @@ fun HeaderSection() {
 fun AiStatusBar() {
     val infiniteTransition = rememberInfiniteTransition(label = "statusPulse")
     val dotAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(900, easing = EaseInOut), RepeatMode.Reverse),
+        initialValue = 0.4f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1000, easing = EaseInOut), RepeatMode.Reverse),
         label = "dot"
     )
 
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier              = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+            modifier              = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment     = Alignment.CenterVertically
         ) {
@@ -379,11 +433,23 @@ fun AiStatusBar() {
 
 @Composable
 fun StatusChip(label: String, color: Color, dotAlpha: Float) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically, 
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
         Box(
-            modifier = Modifier.size(7.dp).background(color.copy(alpha = dotAlpha), CircleShape)
+            modifier = Modifier
+                .size(8.dp)
+                .background(color.copy(alpha = dotAlpha), CircleShape)
+                .border(1.dp, color, CircleShape)
         )
-        Text(text = label, fontSize = 11.sp, color = color, fontWeight = FontWeight.SemiBold, letterSpacing = 0.2.sp)
+        Text(
+            text = label, 
+            fontSize = 12.sp, 
+            color = color, 
+            fontWeight = FontWeight.SemiBold, 
+            letterSpacing = 0.2.sp
+        )
     }
 }
 
@@ -410,18 +476,22 @@ fun BalanceCard(
             .clip(RoundedCornerShape(28.dp))
             .background(
                 brush = Brush.linearGradient(
-                    colors = listOf(Color(0xFF0E1628), Color(0xFF0A0F1E)),
+                    colors = listOf(Color(0xFF0F172E), Color(0xFF070B14)),
                     start  = Offset.Zero,
                     end    = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
                 )
             )
-            .border(1.dp, GlassStroke, RoundedCornerShape(28.dp))
+            .border(1.2.dp, Brush.linearGradient(listOf(GlassStroke, accentColor.copy(alpha = 0.25f))), RoundedCornerShape(28.dp))
+            .bounceClick()
     ) {
+        // Glowing Neon Edge Line
         Box(
-            modifier = Modifier.fillMaxWidth().height(3.dp).background(
-                Brush.horizontalGradient(listOf(AccentBlue, AccentCyan, AccentPurple)),
-                RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-            )
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .background(
+                    Brush.horizontalGradient(listOf(accentColor, AccentCyan, accentColor))
+                )
         )
 
         Column(modifier = Modifier.padding(24.dp)) {
@@ -430,13 +500,26 @@ fun BalanceCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment     = Alignment.CenterVertically
             ) {
-                Text("Available Funds", fontSize = 13.sp, color = TextSecondary, letterSpacing = 0.5.sp)
+                Text(
+                    text = "Available Funds", 
+                    fontSize = 13.sp, 
+                    color = TextSecondary, 
+                    letterSpacing = 0.5.sp,
+                    fontWeight = FontWeight.Medium
+                )
                 Box(
                     modifier = Modifier
                         .background(accentColor.copy(alpha = 0.15f), RoundedCornerShape(10.dp))
+                        .border(0.8.dp, accentColor.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
-                    Text(riskLevel.label, fontSize = 11.sp, color = accentColor, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = riskLevel.label.uppercase(), 
+                        fontSize = 10.sp, 
+                        color = accentColor, 
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.5.sp
+                    )
                 }
             }
 
@@ -449,7 +532,7 @@ fun BalanceCard(
             ) { balance ->
                 Text(
                     text       = "₹${formatAmount(balance)}",
-                    fontSize   = 44.sp,
+                    fontSize   = 46.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color      = TextPrimary,
                     letterSpacing = (-1).sp
@@ -463,28 +546,56 @@ fun BalanceCard(
                     modifier              = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Spent: ₹${formatAmount(spentAmount)}", fontSize = 12.sp, color = TextSecondary)
-                    Text("$budgetUsagePercent% used", fontSize = 12.sp, color = accentColor, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = "Spent: ₹${formatAmount(spentAmount)}", 
+                        fontSize = 12.sp, 
+                        color = TextSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "$budgetUsagePercent% used", 
+                        fontSize = 12.sp, 
+                        color = accentColor, 
+                        fontWeight = FontWeight.Bold
+                    )
                 }
                 Box(
-                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF1E2A40))
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color(0xFF131D31))
                 ) {
                     Box(
-                        modifier = Modifier.fillMaxWidth(animatedProgress).fillMaxHeight().clip(RoundedCornerShape(3.dp)).background(
-                            Brush.horizontalGradient(listOf(accentColor.copy(alpha = 0.7f), accentColor))
-                        )
+                        modifier = Modifier
+                            .fillMaxWidth(animatedProgress)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(
+                                Brush.horizontalGradient(listOf(accentColor.copy(alpha = 0.7f), accentColor))
+                            )
                     )
                 }
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(22.dp))
 
             Row(
                 modifier              = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                MetricPill(label = "Budget", value = "₹${formatAmount(totalBudget)}", color = AccentBlue, modifier = Modifier.weight(1f))
-                MetricPill(label = "Spent",  value = "₹${formatAmount(spentAmount)}", color = DangerRed,  modifier = Modifier.weight(1f))
+                MetricPill(
+                    label = "Total Budget", 
+                    value = "₹${formatAmount(totalBudget)}", 
+                    color = AccentBlue, 
+                    modifier = Modifier.weight(1f)
+                )
+                MetricPill(
+                    label = "Outflow",  
+                    value = "₹${formatAmount(spentAmount)}", 
+                    color = DangerRed,  
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
@@ -496,11 +607,11 @@ fun MetricPill(label: String, value: String, color: Color, modifier: Modifier = 
         modifier = modifier
             .background(color.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
             .border(1.dp, color.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
-            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .padding(horizontal = 14.dp, vertical = 12.dp)
     ) {
-        Text(label, fontSize = 11.sp, color = TextSecondary)
-        Spacer(Modifier.height(2.dp))
-        Text(value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = color)
+        Text(text = label, fontSize = 11.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(4.dp))
+        Text(text = value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = color)
     }
 }
 
@@ -514,47 +625,97 @@ fun RiskMeterCard(modifier: Modifier = Modifier, budgetUsagePercent: Int, riskLe
         label         = "sweep"
     )
     val accentColor = riskLevel.color
+    
+    // Core breathing glow for danger states
+    val infiniteTransition = rememberInfiniteTransition(label = "riskPulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.92f, targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(if (riskLevel == RiskLevel.CRITICAL || riskLevel == RiskLevel.HIGH) 650 else 1800, easing = EaseInOut),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
 
-    GlassCard(modifier = modifier) {
+    GlassCard(
+        modifier = modifier.bounceClick(), 
+        borderGlow = (riskLevel == RiskLevel.CRITICAL || riskLevel == RiskLevel.HIGH)
+    ) {
         Column(
             modifier              = Modifier.padding(18.dp),
             horizontalAlignment   = Alignment.CenterHorizontally,
             verticalArrangement   = Arrangement.spacedBy(10.dp)
         ) {
-            Text("Risk Level", fontSize = 12.sp, color = TextSecondary)
+            Text("Risk Status", fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.SemiBold)
             Box(contentAlignment = Alignment.Center, modifier = Modifier.size(90.dp)) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
-                    val stroke    = 10f
-                    val inset     = stroke / 2
+                    val stroke     = 8f
+                    val inset      = stroke / 2
                     val startAngle = 150f
+                    val totalSweep = 240f
+                    
+                    // Draw detailed speedometer/hud ticks
+                    val numTicks = 15
+                    for (i in 0..numTicks) {
+                        val tickAngle = startAngle + (totalSweep / numTicks) * i
+                        val angleRad  = Math.toRadians(tickAngle.toDouble())
+                        val rOuter    = size.width / 2
+                        val rInner    = rOuter - 12f
+                        val startX    = center.x + rInner * Math.cos(angleRad).toFloat()
+                        val startY    = center.y + rInner * Math.sin(angleRad).toFloat()
+                        val endX      = center.x + rOuter * Math.cos(angleRad).toFloat()
+                        val endY      = center.y + rOuter * Math.sin(angleRad).toFloat()
+                        
+                        val active = (tickAngle - startAngle) <= animatedSweep
+                        val tickColor = if (active) accentColor.copy(alpha = 0.85f) else Color(0xFF1B2538)
+                        drawLine(
+                            color       = tickColor,
+                            start       = Offset(startX, startY),
+                            end         = Offset(endX, endY),
+                            strokeWidth = 2.5f
+                        )
+                    }
+                    
+                    // Background rail
                     drawArc(
-                        color      = Color(0xFF1E2A40),
+                        color      = Color(0xFF0F1522),
                         startAngle = startAngle,
-                        sweepAngle = 240f,
+                        sweepAngle = totalSweep,
                         useCenter  = false,
                         style      = Stroke(width = stroke, cap = StrokeCap.Round),
-                        topLeft    = Offset(inset, inset),
-                        size       = this.size.copy(width = this.size.width - stroke, height = this.size.height - stroke)
+                        topLeft    = Offset(inset + 8, inset + 8),
+                        size       = size.copy(width = size.width - stroke - 16, height = size.height - stroke - 16)
                     )
+                    
+                    // Interactive Sweep colored indicator
                     drawArc(
                         brush      = Brush.sweepGradient(listOf(SafeGreen, AccentAmber, DangerRed)),
                         startAngle = startAngle,
                         sweepAngle = animatedSweep,
                         useCenter  = false,
                         style      = Stroke(width = stroke, cap = StrokeCap.Round),
-                        topLeft    = Offset(inset, inset),
-                        size       = this.size.copy(width = this.size.width - stroke, height = this.size.height - stroke),
-                        alpha      = if (animatedSweep > 0f) 1f else 0f
+                        topLeft    = Offset(inset + 8, inset + 8),
+                        size       = size.copy(width = size.width - stroke - 16, height = size.height - stroke - 16)
                     )
                 }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                
+                // Centered reading
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.scale(pulseScale)
+                ) {
                     Text(
                         text       = "$budgetUsagePercent%",
-                        fontSize   = 18.sp,
+                        fontSize   = 19.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color      = accentColor
                     )
-                    Text(text = riskLevel.label, fontSize = 9.sp, color = TextSecondary)
+                    Text(
+                        text = riskLevel.label.uppercase(), 
+                        fontSize = 8.sp, 
+                        color = TextSecondary,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
@@ -565,12 +726,12 @@ fun RiskMeterCard(modifier: Modifier = Modifier, budgetUsagePercent: Int, riskLe
 
 @Composable
 fun SpendingUsageCard(modifier: Modifier = Modifier, budgetUsagePercent: Int, spentAmount: Int) {
-    GlassCard(modifier = modifier) {
+    GlassCard(modifier = modifier.bounceClick()) {
         Column(
             modifier            = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Spent", fontSize = 12.sp, color = TextSecondary)
+            Text("Outflow", fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.SemiBold)
             Text(
                 text       = "₹${formatAmount(spentAmount)}",
                 fontSize   = 26.sp,
@@ -581,7 +742,7 @@ fun SpendingUsageCard(modifier: Modifier = Modifier, budgetUsagePercent: Int, sp
             )
             Spacer(Modifier.height(4.dp))
             MiniBarChart(percent = budgetUsagePercent)
-            Text(text = "of budget used", fontSize = 11.sp, color = TextSecondary)
+            Text(text = "of overall budget limits", fontSize = 11.sp, color = TextSecondary)
         }
     }
 }
@@ -599,10 +760,18 @@ fun MiniBarChart(percent: Int) {
         else          -> SafeGreen
     }
     Box(
-        modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(2.5.dp)).background(Color(0xFF1E2A40))
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .clip(RoundedCornerShape(3.dp))
+            .background(Color(0xFF1E2A40))
     ) {
         Box(
-            modifier = Modifier.fillMaxWidth(animatedWidth).fillMaxHeight().clip(RoundedCornerShape(2.5.dp)).background(barColor)
+            modifier = Modifier
+                .fillMaxWidth(animatedWidth)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(3.dp))
+                .background(barColor)
         )
     }
 }
@@ -618,7 +787,7 @@ fun BudgetInputCard(budgetInput: String, onInputChange: (String) -> Unit, onUpda
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(modifier = Modifier.size(8.dp).background(AccentCyan, CircleShape))
-                Text("Add Salary / Adjust Budget", fontSize = 14.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                Text("Add Salary / Adjust Budget", fontSize = 14.sp, color = TextPrimary, fontWeight = FontWeight.Bold)
             }
 
             OutlinedTextField(
@@ -635,19 +804,28 @@ fun BudgetInputCard(budgetInput: String, onInputChange: (String) -> Unit, onUpda
                     focusedTextColor     = TextPrimary,
                     unfocusedTextColor   = TextPrimary,
                     cursorColor          = AccentBlue,
-                    focusedContainerColor   = Color(0xFF0D1420),
-                    unfocusedContainerColor = Color(0xFF0D1420)
+                    focusedContainerColor   = Color(0xFF0A0F1D),
+                    unfocusedContainerColor = Color(0xFF0A0F1D)
                 ),
                 textStyle = LocalTextStyle.current.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             )
 
             Box(
-                modifier = Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(16.dp))
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .clip(RoundedCornerShape(16.dp))
                     .background(Brush.horizontalGradient(listOf(AccentBlue, AccentCyan)))
+                    .bounceClick()
                     .clickable { onUpdate() },
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "Update Budget", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = BgDeep)
+                Text(
+                    text = "Update Budget Limit", 
+                    fontSize = 15.sp, 
+                    fontWeight = FontWeight.ExtraBold, 
+                    color = BgDeep
+                )
             }
         }
     }
@@ -659,43 +837,76 @@ fun BudgetInputCard(budgetInput: String, onInputChange: (String) -> Unit, onUpda
 fun PendingPaymentCard(pendingPayment: Int, onYes: () -> Unit, onNo: () -> Unit) {
     val infiniteTransition = rememberInfiniteTransition(label = "warn")
     val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.2f, targetValue = 0.55f,
-        animationSpec = infiniteRepeatable(tween(800, easing = EaseInOut), RepeatMode.Reverse),
+        initialValue = 0.25f, targetValue = 0.65f,
+        animationSpec = infiniteRepeatable(tween(850, easing = EaseInOut), RepeatMode.Reverse),
         label = "glow"
     )
 
     Box(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Color(0xFF150A10))
-            .border(1.5.dp, DangerRed.copy(alpha = glowAlpha + 0.2f), RoundedCornerShape(24.dp))
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color(0xFF1A0B12))
+            .border(1.5.dp, DangerRed.copy(alpha = glowAlpha + 0.1f), RoundedCornerShape(24.dp))
+            .bounceClick()
     ) {
         Box(
-            modifier = Modifier.fillMaxWidth().height(3.dp).background(
-                Brush.horizontalGradient(listOf(DangerRed.copy(alpha = 0.6f), DangerRed, DangerRed.copy(alpha = 0.6f))),
-                RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-            )
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .background(
+                    Brush.horizontalGradient(listOf(DangerRed.copy(alpha = 0.5f), DangerRed, DangerRed.copy(alpha = 0.5f)))
+                )
         )
 
-        Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(modifier = Modifier.size(10.dp).background(DangerRed.copy(alpha = glowAlpha + 0.4f), CircleShape))
-                Text("Pending Payment", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = DangerRed)
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .background(DangerRed.copy(alpha = glowAlpha + 0.3f), CircleShape)
+                        .border(1.dp, DangerRed, CircleShape)
+                )
+                Text("Pending Alert Detected", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = DangerRed)
             }
 
-            Text(text = "₹${formatAmount(pendingPayment)}", fontSize = 40.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
-            Text(text = "OpenClaw AI detected a payment. Did you complete this transaction?", fontSize = 13.sp, color = TextSecondary, lineHeight = 19.sp)
+            Text(
+                text = "₹${formatAmount(pendingPayment)}", 
+                fontSize = 42.sp, 
+                fontWeight = FontWeight.ExtraBold, 
+                color = TextPrimary
+            )
+            Text(
+                text = "OpenClaw AI intercepted this outbound transaction. Can you verify if you completed this purchase?", 
+                fontSize = 13.sp, 
+                color = TextSecondary, 
+                lineHeight = 20.sp,
+                fontWeight = FontWeight.Medium
+            )
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(
-                    modifier = Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp)).background(DangerRed).clickable { onYes() },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(DangerRed)
+                        .clickable { onYes() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("YES, PAID", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                    Text("YES, CONFIRM", fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
                 }
                 Box(
-                    modifier = Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF1E2030)).border(1.dp, GlassStroke, RoundedCornerShape(14.dp)).clickable { onNo() },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFF1E2133))
+                        .border(1.dp, GlassStroke, RoundedCornerShape(14.dp))
+                        .clickable { onNo() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("NO, SKIP", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
+                    Text("NO, CANCEL", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
                 }
             }
         }
@@ -708,14 +919,14 @@ fun PendingPaymentCard(pendingPayment: Int, onYes: () -> Unit, onNo: () -> Unit)
 fun DemoTransactionCard(onSimulate: (Int, String) -> Unit) {
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("Quick Simulation", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text("Simulate Quick Transact", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 DemoButton("₹450 Food", AccentCyan, modifier = Modifier.weight(1f)) { onSimulate(450, "Food") }
-                DemoButton("₹899 Shop", AccentPurple, modifier = Modifier.weight(1f)) { onSimulate(899, "Shopping") }
+                DemoButton("₹899 Shopping", AccentPurple, modifier = Modifier.weight(1f)) { onSimulate(899, "Shopping") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 DemoButton("₹1200 Health", SafeGreen, modifier = Modifier.weight(1f)) { onSimulate(1200, "Health") }
-                DemoButton("₹300 Util", AccentAmber, modifier = Modifier.weight(1f)) { onSimulate(300, "Utilities") }
+                DemoButton("₹300 Utilities", AccentAmber, modifier = Modifier.weight(1f)) { onSimulate(300, "Utilities") }
             }
         }
     }
@@ -724,11 +935,16 @@ fun DemoTransactionCard(onSimulate: (Int, String) -> Unit) {
 @Composable
 fun DemoButton(title: String, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
-        modifier = modifier.height(44.dp).clip(RoundedCornerShape(12.dp)).background(color.copy(alpha = 0.15f))
-            .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(12.dp)).clickable { onClick() },
+        modifier = modifier
+            .height(46.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(color.copy(alpha = 0.1f))
+            .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+            .bounceClick()
+            .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Text(text = title, color = color, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(text = title, color = color, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
     }
 }
 
@@ -766,32 +982,104 @@ fun simulateTransaction(sharedPreferences: android.content.SharedPreferences, am
     Log.d("FinClawSync", "CANONICAL TRANSACTION EVENT GENERATED (MANUAL):\n${syncEvent.toString(4)}")
 }
 
-// ─── Analytics (Pie Chart) ────────────────────────────────────────────────────
+// ─── Categorical Spending (Interactive Donut Chart) ──────────────────────────
 
 @Composable
 fun CategoryPieChartCard(categoryTotals: Map<String, Int>) {
     val totalSpend = categoryTotals.values.sum()
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
 
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Text("Categorical Spend", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Categorical Spend", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                if (selectedCategory != null) {
+                    Text(
+                        text = "Reset View",
+                        fontSize = 12.sp,
+                        color = AccentCyan,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { selectedCategory = null }
+                    )
+                }
+            }
             Spacer(Modifier.height(20.dp))
 
             if (totalSpend == 0) {
                 Text("No spending data yet", color = TextSecondary, fontSize = 14.sp)
             } else {
-                Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                    Canvas(modifier = Modifier.size(180.dp)) {
-                        var startAngle = 0f
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Center reading
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        if (selectedCategory == null) {
+                            Text(
+                                text = "₹${formatAmount(totalSpend)}",
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "Total Spent",
+                                fontSize = 11.sp,
+                                color = TextSecondary,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
+                            )
+                        } else {
+                            val catAmount = categoryTotals[selectedCategory] ?: 0
+                            val pct = (catAmount.toFloat() / totalSpend.toFloat() * 100).toInt()
+                            Text(
+                                text = "₹${formatAmount(catAmount)}",
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = CATEGORY_COLORS[CATEGORIES.indexOf(selectedCategory).coerceAtLeast(0)]
+                            )
+                            Text(
+                                text = "$selectedCategory ($pct%)",
+                                fontSize = 12.sp,
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Canvas(modifier = Modifier.size(190.dp)) {
+                        var startAngle = -90f // Start top
                         CATEGORIES.forEachIndexed { index, category ->
                             val amount = categoryTotals[category] ?: 0
                             if (amount > 0) {
                                 val sweepAngle = (amount.toFloat() / totalSpend.toFloat()) * 360f
+                                val isSelected = selectedCategory == category
+                                val isAnySelected = selectedCategory != null
+                                
+                                val alphaVal = if (isSelected) 1f else if (isAnySelected) 0.3f else 0.85f
+                                val strokeWidthVal = if (isSelected) 34f else 24f
+                                val colorVal = CATEGORY_COLORS.getOrElse(index) { Color.Gray }
+                                
                                 drawArc(
-                                    color = CATEGORY_COLORS.getOrElse(index) { Color.Gray },
+                                    color = colorVal,
                                     startAngle = startAngle,
                                     sweepAngle = sweepAngle,
-                                    useCenter = true
+                                    useCenter = false,
+                                    style = Stroke(width = strokeWidthVal, cap = StrokeCap.Round),
+                                    alpha = alphaVal,
+                                    size = size.copy(
+                                        width = size.width - 40,
+                                        height = size.height - 40
+                                    ),
+                                    topLeft = Offset(20f, 20f)
                                 )
                                 startAngle += sweepAngle
                             }
@@ -799,14 +1087,32 @@ fun CategoryPieChartCard(categoryTotals: Map<String, Int>) {
                     }
                 }
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(20.dp))
 
                 // Legend
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     CATEGORIES.forEachIndexed { index, category ->
                         val amount = categoryTotals[category] ?: 0
                         if (amount > 0) {
-                            CategoryLegend(category, amount, CATEGORY_COLORS.getOrElse(index) { Color.Gray })
+                            val isSelected = selectedCategory == category
+                            val isAnySelected = selectedCategory != null
+                            val opacity = if (isSelected) 1f else if (isAnySelected) 0.45f else 0.9f
+                            
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isSelected) Color(0x12FFFFFF) else Color.Transparent)
+                                    .clickable { selectedCategory = if (isSelected) null else category }
+                                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                                    .alpha(opacity)
+                            ) {
+                                CategoryLegend(
+                                    label = category,
+                                    amount = amount,
+                                    color = CATEGORY_COLORS.getOrElse(index) { Color.Gray }
+                                )
+                            }
                         }
                     }
                 }
@@ -824,9 +1130,9 @@ fun CategoryLegend(label: String, amount: Int, color: Color) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(modifier = Modifier.size(10.dp).background(color, CircleShape))
-            Text(text = label, color = TextPrimary, fontSize = 14.sp)
+            Text(text = label, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
-        Text(text = "₹$amount", color = TextSecondary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Text(text = "₹$amount", color = TextSecondary, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
     }
 }
 
@@ -838,12 +1144,10 @@ fun TransactionHistoryCard(historyString: String) {
 
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Text("Recent Transactions", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text("Recent Activity Log", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Spacer(Modifier.height(16.dp))
 
             if (transactionList.isEmpty()) {
-                Text("No transactions yet", color = TextSecondary, fontSize = 14.sp)
-            } else {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     transactionList.take(10).forEach { entry ->
                         val parts = entry.split("|")
@@ -880,9 +1184,22 @@ fun TransactionItem(merchant: String, amount: String, category: String, time: St
 // ─── Reusable Glass Card ──────────────────────────────────────────────────────
 
 @Composable
-fun GlassCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+fun GlassCard(
+    modifier: Modifier = Modifier,
+    borderGlow: Boolean = false,
+    content: @Composable () -> Unit
+) {
+    val glowBrush = if (borderGlow) {
+        Brush.linearGradient(listOf(GlassStroke, DangerRed.copy(alpha = 0.5f), GlassStroke))
+    } else {
+        SolidColor(GlassStroke)
+    }
+
     Box(
-        modifier = modifier.clip(RoundedCornerShape(22.dp)).background(BgCardAlt).border(1.dp, GlassStroke, RoundedCornerShape(22.dp))
+        modifier = modifier
+            .clip(RoundedCornerShape(22.dp))
+            .background(BgCardAlt)
+            .border(1.dp, glowBrush, RoundedCornerShape(22.dp))
     ) {
         content()
     }
