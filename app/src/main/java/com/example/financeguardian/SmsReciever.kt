@@ -10,6 +10,12 @@ import androidx.core.content.edit
 class SmsReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        Log.d(
+            "FinClawSMS",
+            "SMS RECEIVER TRIGGERED"
+        )
+
+
         if (intent.action == Telephony.Sms.Intents.SMS_RECEIVED_ACTION) {
             val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
             for (smsMessage in messages) {
@@ -71,35 +77,51 @@ class SmsReceiver : BroadcastReceiver() {
                     val amountStr = amountMatch?.groupValues?.getOrNull(2) ?: ""
 
                     // 2. Merchant extraction
-                    var merchant = "Unknown Merchant"
+
 
 // Different merchant patterns
-                    val patterns = listOf(
+                    var merchant = "Unknown Merchant"
 
-                        Regex("on\\s([a-zA-Z0-9 ]+)"),
+                    val lines =
 
-                        Regex("at\\s([a-zA-Z0-9 ]+)"),
+                        message.split("\n")
 
-                        Regex("to\\s([a-zA-Z0-9 ]+)"),
+                    for (line in lines) {
 
-                        Regex("for\\s([a-zA-Z0-9 ]+)")
-                    )
+                        if (
 
-                    for (pattern in patterns) {
+                            line.trim()
 
-                        val match =
-                            pattern.find(message)
-
-                        if (match != null) {
+                                .startsWith(
+                                    "To ",
+                                    ignoreCase = true
+                                )
+                        ) {
 
                             merchant =
 
-                                match.groupValues[1]
+                                line
+
+                                    .replace(
+                                        "To ",
+                                        "",
+                                        ignoreCase = true
+                                    )
+
                                     .trim()
 
                             break
                         }
                     }
+
+                    Log.d(
+                        "FinClawSMS",
+                        "MERCHANT: $merchant"
+                    )
+
+
+
+
 
 
                     Log.d("FinClawSMS", "MERCHANT: $merchant")
