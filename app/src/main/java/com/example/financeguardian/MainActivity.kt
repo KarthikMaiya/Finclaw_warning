@@ -227,7 +227,12 @@ fun FinanceGuardianUI(context: Context) {
 
                 // ── Pending Payment ──────────────────────────────────────────
                 if (pendingPayment > 0) {
+
                     item {
+                        TransactionHistoryCard(
+                            context = context
+                        )
+
                         PendingPaymentCard(
                             pendingPayment = pendingPayment,
                             onYes = {
@@ -873,11 +878,77 @@ fun simulateTransaction(
 @Composable
 fun CategoryPieChartCard(context: Context) {
     val sharedPreferences = context.getSharedPreferences("FinanceGuardian", Context.MODE_PRIVATE)
-    val food = sharedPreferences.getInt("Food", 0)
-    val shopping = sharedPreferences.getInt("Shopping", 0)
-    val utilities = sharedPreferences.getInt("Utilities", 0)
-    val personal = sharedPreferences.getInt("Personal", 0)
-    val others = sharedPreferences.getInt("Others", 0)
+    var food by remember {
+
+        mutableStateOf(0)
+    }
+
+    var shopping by remember {
+
+        mutableStateOf(0)
+    }
+
+    var utilities by remember {
+
+        mutableStateOf(0)
+    }
+
+    var personal by remember {
+
+        mutableStateOf(0)
+    }
+
+    var others by remember {
+
+        mutableStateOf(0)
+    }
+
+    LaunchedEffect(Unit) {
+
+        while (true) {
+
+            food =
+
+                sharedPreferences.getInt(
+                    "Food",
+                    0
+                )
+
+            shopping =
+
+                sharedPreferences.getInt(
+                    "Shopping",
+                    0
+                )
+
+            utilities =
+
+                sharedPreferences.getInt(
+                    "Utilities",
+                    0
+                )
+
+            personal =
+
+                sharedPreferences.getInt(
+                    "Personal",
+                    0
+                )
+
+            others =
+
+                sharedPreferences.getInt(
+                    "Others",
+                    0
+                )
+
+            delay(500)
+        }
+    }
+
+
+
+
     val total = food + shopping + utilities + personal + others
 
     GlassCard(modifier = Modifier.fillMaxWidth()) {
@@ -947,3 +1018,187 @@ fun CategoryLegend(label: String, amount: Int, color: Color) {
         Text(text = "₹$amount", color = TextSecondary)
     }
 }
+@Composable
+fun TransactionHistoryCard(
+    context: Context
+) {
+
+    val sharedPreferences =
+
+        context.getSharedPreferences(
+            "FinanceGuardian",
+            Context.MODE_PRIVATE
+        )
+
+    var transactions by remember {
+
+        mutableStateOf("")
+    }
+
+    LaunchedEffect(Unit) {
+
+        while (true) {
+
+            transactions =
+
+                sharedPreferences.getString(
+                    "TRANSACTION_HISTORY",
+                    ""
+                ) ?: ""
+
+            delay(500)
+        }
+    }
+
+    val transactionList =
+
+        transactions
+
+            .split("\n")
+
+            .filter {
+
+                it.isNotEmpty()
+            }
+
+    GlassCard(
+
+        modifier =
+            Modifier.fillMaxWidth()
+
+    ) {
+
+        Column(
+
+            modifier =
+                Modifier.padding(20.dp)
+
+        ) {
+
+            Text(
+
+                text =
+                    "Recent Transactions",
+
+                fontSize = 18.sp,
+
+                fontWeight =
+                    FontWeight.Bold,
+
+                color =
+                    TextPrimary
+            )
+
+            Spacer(
+                modifier =
+                    Modifier.height(16.dp)
+            )
+
+            if (transactionList.isEmpty()) {
+
+                Text(
+
+                    text =
+                        "No transactions yet",
+
+                    color =
+                        TextSecondary
+                )
+
+            } else {
+
+                transactionList.take(10).forEach {
+
+                    val parts =
+                        it.split("|")
+
+                    if (parts.size >= 4) {
+
+                        TransactionItem(
+
+                            merchant =
+                                parts[0],
+
+                            amount =
+                                parts[1],
+
+                            category =
+                                parts[2],
+
+                            time =
+                                parts[3]
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TransactionItem(
+
+    merchant: String,
+
+    amount: String,
+
+    category: String,
+
+    time: String
+) {
+
+    Row(
+
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
+
+        horizontalArrangement =
+            Arrangement.SpaceBetween,
+
+        verticalAlignment =
+            Alignment.CenterVertically
+    ) {
+
+        Column {
+
+            Text(
+
+                text =
+                    merchant,
+
+                color =
+                    TextPrimary,
+
+                fontWeight =
+                    FontWeight.Bold
+            )
+
+            Text(
+
+                text =
+                    "$category • $time",
+
+                color =
+                    TextSecondary,
+
+                fontSize =
+                    12.sp
+            )
+        }
+
+        Text(
+
+            text =
+                amount,
+
+            color =
+                DangerRed,
+
+            fontWeight =
+                FontWeight.Bold
+        )
+    }
+}
+

@@ -14,21 +14,59 @@ class SmsReceiver : BroadcastReceiver() {
             val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
             for (smsMessage in messages) {
                 val sender = smsMessage.displayOriginatingAddress
+                val isTestSender =
+
+                    sender.contains(
+                        "Vishal",
+                        ignoreCase = true
+                    )
+
+
+
                 val message = smsMessage.messageBody
                 Log.d("FinClawSMS", "SMS FROM: $sender")
                 Log.d("FinClawSMS", "MESSAGE: $message")
 
                 val lowerMessage = message.lowercase()
                 val financeKeywords = listOf(
-                    "debited", "credited", "spent", "upi", "payment",
-                    "txn", "transaction", "withdrawn", "purchase"
+                    "debited",
+                    "credited",
+                    "spent",
+                    "upi",
+                    "payment",
+                    "txn",
+                    "transaction",
+                    "withdrawn",
+                    "purchase",
+
+                    // NEW EASY TEST WORDS
+                    "rs",
+                    "inr",
+                    "₹"
+
                 )
 
-                if (financeKeywords.any { lowerMessage.contains(it) }) {
+                val isFinanceMessage =
+
+                    financeKeywords.any {
+                        lowerMessage.contains(it)
+                    }
+
+                if (
+                    isFinanceMessage ||
+                    isTestSender
+                ) {
+
+
                     Log.d("FinClawSMS", "FINANCIAL SMS DETECTED")
 
                     // 1. Amount extraction
-                    val amountRegex = Regex("(rs\\.?|inr|₹)\\s?([\\d,]+)")
+                    val amountRegex = Regex(
+                        "(rs\\.?|inr|₹)\\s?[\\d,]+",
+                        RegexOption.IGNORE_CASE
+                    )
+
+
                     val amountMatch = amountRegex.find(lowerMessage)
                     val amountStr = amountMatch?.groupValues?.getOrNull(2) ?: ""
 
@@ -107,6 +145,44 @@ class SmsReceiver : BroadcastReceiver() {
                                 putInt(category, updatedCategoryAmount)
                             }
                             Log.d("FinClawSMS", "CATEGORY TOTAL UPDATED: $category = $updatedCategoryAmount")
+                            val existingTransactions =
+
+                                sharedPreferences.getString(
+                                    "TRANSACTION_HISTORY",
+                                    ""
+                                ) ?: ""
+
+                            val timestamp =
+
+                                java.text.SimpleDateFormat(
+                                    "hh:mm a",
+                                    java.util.Locale.getDefault()
+                                ).format(
+                                    java.util.Date()
+                                )
+
+                            val newTransaction =
+
+                                "$merchant|₹$numericAmount|$category|$timestamp\n"
+
+                            val updatedTransactions =
+
+                                newTransaction + existingTransactions
+
+                            sharedPreferences
+                                .edit()
+                                .putString(
+                                    "TRANSACTION_HISTORY",
+                                    updatedTransactions
+                                )
+                                .apply()
+
+                            Log.d(
+                                "FinClawSMS",
+                                "TRANSACTION SAVED"
+                            )
+
+
 
                         } catch (e: Exception) {
                             Log.d("FinClawSMS", "SMS PROCESSING ERROR: ${e.message}")
