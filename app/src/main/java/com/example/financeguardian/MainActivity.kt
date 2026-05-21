@@ -126,14 +126,20 @@ fun FinanceGuardianUI(context: Context) {
         }
     }
 
+    val analytics by remember(totalBudget, currentBalance, categoryTotals, transactionHistory) {
+        derivedStateOf {
+            computeAnalytics(totalBudget, currentBalance, categoryTotals.toMap(), transactionHistory)
+        }
+    }
+
+    val riskAnalysis by remember(totalBudget, currentBalance, categoryTotals, transactionHistory) {
+        derivedStateOf {
+            computeRiskAnalysis(totalBudget, currentBalance, categoryTotals.toMap(), transactionHistory)
+        }
+    }
+
     val spentAmount         = totalBudget - currentBalance
     val budgetUsagePercent  = if (totalBudget > 0) ((spentAmount.toFloat() / totalBudget.toFloat()) * 100).toInt() else 0
-
-    val riskLevel = when {
-        budgetUsagePercent >= 85 -> RiskLevel.DANGER
-        budgetUsagePercent >= 60 -> RiskLevel.CAUTION
-        else                     -> RiskLevel.SAFE
-    }
 
     // Global fade-in
     var visible by remember { mutableStateOf(false) }
@@ -166,7 +172,7 @@ fun FinanceGuardianUI(context: Context) {
                         currentBalance     = currentBalance,
                         spentAmount        = spentAmount,
                         budgetUsagePercent = budgetUsagePercent,
-                        riskLevel          = riskLevel
+                        riskLevel          = riskAnalysis.riskLevel
                     )
                 }
 
@@ -177,8 +183,8 @@ fun FinanceGuardianUI(context: Context) {
                     ) {
                         RiskMeterCard(
                             modifier           = Modifier.weight(1f),
-                            budgetUsagePercent = budgetUsagePercent,
-                            riskLevel          = riskLevel
+                            budgetUsagePercent = riskAnalysis.score,
+                            riskLevel          = riskAnalysis.riskLevel
                         )
                         SpendingUsageCard(
                             modifier           = Modifier.weight(1f),
@@ -186,6 +192,16 @@ fun FinanceGuardianUI(context: Context) {
                             spentAmount        = spentAmount
                         )
                     }
+                }
+
+                // Monthly Analytics Card
+                item {
+                    AnalyticsCard(analytics = analytics)
+                }
+
+                // AI Risk Engine Card
+                item {
+                    RiskEngineCard(risk = riskAnalysis)
                 }
 
                 // Quick Demo Simulation
@@ -726,7 +742,8 @@ fun simulateTransaction(sharedPreferences: android.content.SharedPreferences, am
         
         // Add to history
         val timestamp = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date())
-        val newEntry = "Demo Spend|₹$amount|$category|$timestamp\n"
+        val dateStamp = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+        val newEntry = "Demo Spend|₹$amount|$category|$timestamp|$dateStamp\n"
         val existing = sharedPreferences.getString("TRANSACTION_HISTORY", "") ?: ""
         putString("TRANSACTION_HISTORY", newEntry + existing)
     }
@@ -811,7 +828,7 @@ fun TransactionHistoryCard(historyString: String) {
                 Text("No transactions yet", color = TextSecondary, fontSize = 14.sp)
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    transactionList.take(5).forEach { entry ->
+                    transactionList.take(10).forEach { entry ->
                         val parts = entry.split("|")
                         if (parts.size >= 4) {
                             TransactionItem(
@@ -855,7 +872,165 @@ fun GlassCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
 }
 
 enum class RiskLevel(val label: String, val color: Color) {
-    SAFE("Safe", SafeGreen), CAUTION("Caution", AccentAmber), DANGER("Danger", DangerRed)
+    SAFE("Safe", SafeGreen),
+    CAUTION("Caution", AccentAmber),
+    HIGH("High Risk", Color(0xFFFF8C00)),
+    CRITICAL("Critical", DangerRed)
+}
+
+// ─── Risk & Warning Engine ──────────────────────────────────────────────────
+
+data class RiskAnalysis(
+    val riskLevel: RiskLevel,
+    val warnings: List<String>,
+    val aiInsight: String,
+    val score: Int // 0-100
+)
+
+fun computeRiskAnalysis(
+    totalBudget: Int,
+    currentBalance: Int,
+    categoryTotals: Map<String, Int>,
+    history: String
+): RiskAnalysis {
+    val warnings = mutableListOf<String>()
+    var riskPoints = 0
+    
+    val spent = (totalBudget - currentBalance).coerceAtLeast(0)
+    val usagePct = if (totalBudget > 0) (spent * 100 / totalBudget) else 0
+    
+    // 1. Balance based risks
+    when {
+        usagePct >= 90 -> {
+            riskPoints += 40
+            warnings.add("Remaining budget is critically low")
+        }
+        usagePct >= 75 -> {
+            riskPoints += 25
+            warnings.add("Budget usage is becoming risky")
+        }
+        usagePct >= 60 -> {
+            riskPoints += 15
+            warnings.add("Spending is outpacing the monthly cycle")
+        }
+    }
+    
+    // 2. Category based risks
+    categoryTotals.forEach { (cat, amount) ->
+        if (spent > 0) {
+            val catPct = amount * 100 / spent
+            if (catPct > 50) {
+                riskPoints += 20
+                warnings.add("$cat dominates your monthly spending")
+            } else if (catPct > 35) {
+                riskPoints += 10
+                warnings.add("$cat activity is unusually high")
+            }
+        }
+    }
+    
+    // 3. Large transaction detection
+    val lines = history.split("\n").filter { it.isNotEmpty() }
+    if (lines.isNotEmpty()) {
+        val lastAmountStr = lines.first().split("|").getOrNull(1)?.replace("₹", "") ?: "0"
+        val lastAmount = lastAmountStr.toIntOrNull() ?: 0
+        if (totalBudget > 0 && lastAmount > (totalBudget * 0.2)) {
+            riskPoints += 15
+            warnings.add("Last transaction was unusually large")
+        }
+    }
+    
+    // 4. Frequency detection
+    if (lines.size > 15) {
+        riskPoints += 10
+        warnings.add("High frequency of small transactions detected")
+    }
+    
+    val level = when {
+        riskPoints >= 60 -> RiskLevel.CRITICAL
+        riskPoints >= 40 -> RiskLevel.HIGH
+        riskPoints >= 20 -> RiskLevel.CAUTION
+        else            -> RiskLevel.SAFE
+    }
+    
+    val aiInsight = when (level) {
+        RiskLevel.CRITICAL -> "Immediate intervention required to avoid total budget exhaustion."
+        RiskLevel.HIGH -> "Current spending behavior may exhaust budget early."
+        RiskLevel.CAUTION -> "Spending is slightly above optimal levels. Monitor closely."
+        RiskLevel.SAFE -> "Financial health is optimal. Spending patterns remain predictable."
+    }
+    
+    return RiskAnalysis(level, warnings.take(3), aiInsight, riskPoints.coerceIn(0, 100))
+}
+
+@Composable
+fun RiskEngineCard(risk: RiskAnalysis) {
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.6f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "alpha"
+    )
+    
+    val cardAlpha = if (risk.riskLevel == RiskLevel.CRITICAL) pulseAlpha else 1f
+    
+    GlassCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer { alpha = cardAlpha }
+            .border(
+                width = if (risk.riskLevel == RiskLevel.CRITICAL) 2.dp else 0.dp,
+                color = if (risk.riskLevel == RiskLevel.CRITICAL) risk.riskLevel.color.copy(alpha = 0.5f) else Color.Transparent,
+                shape = RoundedCornerShape(22.dp)
+            )
+    ) {
+        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("AI RISK ENGINE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = risk.riskLevel.color, letterSpacing = 1.2.sp)
+                Box(
+                    modifier = Modifier
+                        .background(risk.riskLevel.color.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(risk.riskLevel.label, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = risk.riskLevel.color)
+                }
+            }
+            
+            if (risk.warnings.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    risk.warnings.forEach { warning ->
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(modifier = Modifier.size(6.dp).background(risk.riskLevel.color, CircleShape))
+                            Text(text = warning, fontSize = 13.sp, color = TextPrimary.copy(alpha = 0.9f))
+                        }
+                    }
+                }
+            } else {
+                Text("No critical risks detected in current behavior.", fontSize = 13.sp, color = TextSecondary)
+            }
+            
+            HorizontalDivider(color = GlassStroke, thickness = 1.dp)
+            
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("AI Insight", fontSize = 10.sp, color = TextSecondary, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                Text(
+                    text = "\"${risk.aiInsight}\"",
+                    fontSize = 14.sp,
+                    fontStyle = FontStyle.Italic,
+                    color = TextPrimary,
+                    lineHeight = 20.sp
+                )
+            }
+        }
+    }
 }
 
 fun formatAmount(amount: Int): String {
@@ -863,5 +1038,123 @@ fun formatAmount(amount: Int): String {
         amount >= 100_000 -> "%.1fL".format(amount / 100_000f)
         amount >= 1_000   -> "%.1fK".format(amount / 1_000f)
         else              -> amount.toString()
+    }
+}
+
+// ─── Analytics Engine ─────────────────────────────────────────────────────────
+
+enum class Trend { UP, DOWN, STABLE }
+
+data class SpendingAnalytics(
+    val monthlySpend: Int,
+    val budgetUsagePercent: Int,
+    val highestCategory: String,
+    val avgDailySpend: Int,
+    val weeklyTrend: Trend,
+    val insight: String
+)
+
+fun computeAnalytics(
+    totalBudget: Int,
+    currentBalance: Int,
+    categoryTotals: Map<String, Int>,
+    history: String
+): SpendingAnalytics {
+    val monthlySpend = (totalBudget - currentBalance).coerceAtLeast(0)
+    val usagePct = if (totalBudget > 0) (monthlySpend * 100 / totalBudget) else 0
+    
+    val highestEntry = categoryTotals.maxByOrNull { it.value }
+    val highestCat = if (highestEntry != null && highestEntry.value > 0) highestEntry.key else "None"
+    
+    val calendar = java.util.Calendar.getInstance()
+    val dayOfMonth = calendar[java.util.Calendar.DAY_OF_MONTH]
+    val avgDaily = monthlySpend / dayOfMonth
+    
+    // Trend: compare count of lines (proxy for activity)
+    val lines = history.split("\n").filter { it.isNotEmpty() }
+    val weeklyTrend = when {
+        lines.size > 12 -> Trend.UP
+        lines.size > 6  -> Trend.STABLE
+        else            -> Trend.DOWN
+    }
+    
+    // Insights generator
+    val insight = when {
+        usagePct > 85 -> "Emergency: Budget almost exhausted. Rapid spending detected."
+        highestCat != "None" && ((categoryTotals[highestCat] ?: 0) > (monthlySpend * 0.45)) -> 
+            "$highestCat spending is disproportionately high this month."
+        avgDaily > 2000 -> "High velocity spending. Your daily average is above threshold."
+        lines.size > 20 -> "Hyper-active transaction history. Consider consolidating purchases."
+        (usagePct < 30) && (dayOfMonth > 15) -> "Excellent budget control. You are well below monthly targets."
+        else -> "Financial health is optimal. Spending patterns remain predictable."
+    }
+    
+    return SpendingAnalytics(monthlySpend, usagePct, highestCat, avgDaily, weeklyTrend, insight)
+}
+
+@Composable
+fun AnalyticsCard(analytics: SpendingAnalytics) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text("FINANCIAL INTELLIGENCE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AccentCyan, letterSpacing = 1.2.sp)
+            
+            Column {
+                Text(
+                    text = "₹${formatAmount(analytics.monthlySpend)}",
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = TextPrimary
+                )
+                Text("Total monthly expenditure", fontSize = 12.sp, color = TextSecondary)
+            }
+            
+            HorizontalDivider(color = GlassStroke, thickness = 1.dp)
+            
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                AnalyticsItem("Dominant Category", analytics.highestCategory, Modifier.weight(1f))
+                AnalyticsItem("Daily Burn Rate", "₹${formatAmount(analytics.avgDailySpend)}", Modifier.weight(1f))
+            }
+            
+            // AI Insight Box
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(AccentBlue.copy(alpha = 0.08f))
+                    .border(1.dp, AccentBlue.copy(alpha = 0.15f), RoundedCornerShape(14.dp))
+                    .padding(16.dp)
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("🦞", fontSize = 20.sp)
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("AI Spending Insight", fontSize = 10.sp, color = AccentBlue, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                        Text(analytics.insight, fontSize = 13.sp, color = TextPrimary.copy(alpha = 0.9f), lineHeight = 18.sp)
+                    }
+                }
+            }
+            
+            // Trend Indicator
+            val trendInfo = when(analytics.weeklyTrend) {
+                Trend.UP -> Triple(DangerRed, "↑", "Spending velocity increasing")
+                Trend.DOWN -> Triple(SafeGreen, "↓", "Spending velocity decreasing")
+                Trend.STABLE -> Triple(AccentAmber, "→", "Spending velocity stable")
+            }
+            
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(modifier = Modifier.size(18.dp).background(trendInfo.first.copy(alpha = 0.15f), CircleShape), contentAlignment = Alignment.Center) {
+                    Text(trendInfo.second, fontSize = 12.sp, color = trendInfo.first, fontWeight = FontWeight.Bold)
+                }
+                Text(trendInfo.third, fontSize = 12.sp, color = TextSecondary)
+            }
+        }
+    }
+}
+
+@Composable
+fun AnalyticsItem(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(label, fontSize = 11.sp, color = TextSecondary)
+        Spacer(Modifier.height(2.dp))
+        Text(value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
     }
 }

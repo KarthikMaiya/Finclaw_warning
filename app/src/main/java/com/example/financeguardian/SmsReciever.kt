@@ -81,7 +81,8 @@ class SmsReceiver : BroadcastReceiver() {
                             // 6. Transaction History
                             val existingHistory = sharedPreferences.getString("TRANSACTION_HISTORY", "") ?: ""
                             val timestamp = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date())
-                            val newTransaction = "$merchant|₹$numericAmount|$category|$timestamp\n"
+                            val dateStamp = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                            val newTransaction = "$merchant|₹$numericAmount|$category|$timestamp|$dateStamp\n"
 
                             sharedPreferences.edit {
                                 putInt("CURRENT_BALANCE", updatedBalance)
