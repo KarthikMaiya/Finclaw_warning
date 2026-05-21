@@ -3,10 +3,16 @@ package com.example.financeguardian
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.provider.Telephony
 import android.util.Log
 import androidx.core.content.edit
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -59,7 +65,103 @@ fun buildTransactionEvent(
 
 class SmsReceiver : BroadcastReceiver() {
 
+    companion object {
+        private const val TELEGRAM_BOT_TOKEN = "8729828854:AAFyVoI-ktc3Q6vrW42ft192MQMoJFQAQ24"
+        private const val GROUP_CHAT_ID      = "-1003714859222"
+
+
+        private const val TELEGRAM_API_URL   = "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage"
+
+        private val httpClient = OkHttpClient()
+
+        private fun isInternetAvailable(context: Context): Boolean {
+            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val network = connectivityManager.activeNetwork ?: return false
+            val activeNetwork = connectivityManager.getNetworkCapabilities(network) ?: return false
+            return when {
+                activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> true
+                activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> true
+                activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> true
+                else -> false
+            }
+        }
+
+        private fun sendTransactionToTelegram(context: Context, event: JSONObject) {
+            val messageText = "FINCLAW_EVENT:\n$event"
+            executeTelegramApiCall(context, messageText)
+        }
+
+        /**
+         * CORE TRANSPORT LOGIC
+         * Executes the actual HTTP POST to Telegram with detailed logging.
+         */
+        private fun executeTelegramApiCall(context: Context, messageText: String) {
+            if (!isInternetAvailable(context)) {
+                Log.e("FinClawTelegram", "SYNC ABORTED: Internet unavailable. Verify device connectivity.")
+                return
+            }
+
+            val payload = JSONObject().apply {
+                put("chat_id", GROUP_CHAT_ID)
+                put("text", messageText)
+            }
+
+            val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url(TELEGRAM_API_URL)
+                .post(requestBody)
+                .build()
+
+            Log.d("FinClawTelegram", ">>> INITIATING TELEGRAM REQUEST <<<")
+            Log.d("FinClawTelegram", "TARGET URL: $TELEGRAM_API_URL")
+            Log.d("FinClawTelegram", "PAYLOAD JSON:\n${payload.toString(2)}")
+
+            httpClient.newCall(request).enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    Log.e("FinClawTelegram", "!!! TRANSPORT FAILURE (IOException) !!!")
+                    Log.e("FinClawTelegram", "Exception Type: ${e.javaClass.simpleName}")
+                    Log.e("FinClawTelegram", "Error Message: ${e.message}")
+                    
+                    // Detailed logging for common network issues
+                    when (e) {
+                        is java.net.UnknownHostException -> Log.e("FinClawTelegram", "DIAGNOSIS: DNS failure. Cannot resolve api.telegram.org")
+                        is java.net.SocketTimeoutException -> Log.e("FinClawTelegram", "DIAGNOSIS: Connection timed out.")
+                        is java.net.ConnectException -> Log.e("FinClawTelegram", "DIAGNOSIS: Connection refused.")
+                    }
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    val responseBody = response.body?.string() ?: ""
+                    Log.d("FinClawTelegram", "<<< TELEGRAM API RESPONSE >>>")
+                    Log.d("FinClawTelegram", "HTTP STATUS: ${response.code} ${response.message}")
+                    Log.d("FinClawTelegram", "RESPONSE BODY:\n$responseBody")
+
+                    if (response.isSuccessful) {
+                        Log.i("FinClawTelegram", "SUCCESS: Message delivered to group $GROUP_CHAT_ID")
+                    } else {
+                        Log.e("FinClawTelegram", "REJECTED: Telegram API returned error code ${response.code}")
+                        Log.e("FinClawTelegram", "DIAGNOSIS: Check if bot is a member of group $GROUP_CHAT_ID and has 'Send Messages' permission.")
+                    }
+                    response.close()
+                }
+            })
+        }
+
+        /**
+         * TASK 9: TEMPORARY HARD-CODED TEST
+         * Triggers a simple text message to verify group reachability.
+         */
+        fun sendSimpleTelegramTest(context: Context) {
+            Log.d("FinClawTelegram", "MANUAL TEST TRIGGERED: sendSimpleTelegramTest")
+            executeTelegramApiCall(context, "TEST_MESSAGE_FROM_FINCLAW")
+        }
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
+        // QUICK DEBUG: Trigger simple test for ANY incoming intent to verify transport
+        // Log.d("FinClawTelegram", "onReceive triggered - running simple test")
+        // sendSimpleTelegramTest(context)
+
         if (intent.action == Telephony.Sms.Intents.SMS_RECEIVED_ACTION) {
             val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
             for (smsMessage in messages) {
@@ -163,6 +265,9 @@ class SmsReceiver : BroadcastReceiver() {
 
                             // TASK 4: Log pretty JSON
                             Log.d("FinClawSync", "CANONICAL TRANSACTION EVENT GENERATED:\n${syncEvent.toString(4)}")
+
+                            // PHASE 2A: Passive Synchronization to Telegram
+                            sendTransactionToTelegram(context, syncEvent)
 
                         } catch (e: Exception) {
                             Log.e("FinClawSMS", "ERROR: ${e.message}")

@@ -20,11 +20,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.*
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -706,6 +708,7 @@ fun PendingPaymentCard(pendingPayment: Int, onYes: () -> Unit, onNo: () -> Unit)
 
 @Composable
 fun DemoTransactionCard(onSimulate: (Int, String) -> Unit) {
+    val context = LocalContext.current
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Quick Simulation", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
@@ -716,6 +719,11 @@ fun DemoTransactionCard(onSimulate: (Int, String) -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 DemoButton("₹1200 Health", SafeGreen, modifier = Modifier.weight(1f)) { onSimulate(1200, "Health") }
                 DemoButton("₹300 Util", AccentAmber, modifier = Modifier.weight(1f)) { onSimulate(300, "Utilities") }
+            }
+            
+            // TASK 9: Telegram Transport Debug Button
+            DemoButton("Test Telegram Group", AccentBlue, modifier = Modifier.fillMaxWidth()) {
+                SmsReceiver.sendSimpleTelegramTest(context)
             }
         }
     }
