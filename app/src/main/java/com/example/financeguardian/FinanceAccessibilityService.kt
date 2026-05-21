@@ -164,6 +164,8 @@ class FinanceAccessibilityService : AccessibilityService() {
 
     private fun sendPaymentToBackend(packageName: String, amount: String) {
         val appFriendlyName = SUPPORTED_APPS[packageName] ?: packageName
+        val numericAmount = parseRupeeAmount(amount)
+        
         val json = JSONObject().apply {
             put("app",    appFriendlyName)
             put("amount", amount)
@@ -174,6 +176,30 @@ class FinanceAccessibilityService : AccessibilityService() {
             .addHeader("Content-Type", "application/json")
             .post(json.toRequestBody("application/json".toMediaType()))
             .build()
+
+        // PHASE 1: Generate Standardized Event for Accessibility
+        val sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val totalBudget = sharedPreferences.getInt("TOTAL_BUDGET", 0)
+        
+        val categoryHint = when {
+            packageName.contains("swiggy") || packageName.contains("zomato") -> "Food"
+            packageName.contains("amazon") || packageName.contains("flipkart") -> "Shopping"
+            else -> "Others"
+        }
+        
+        val estimatedRisk = if (totalBudget > 0 && numericAmount > (totalBudget * 0.2)) "HIGH" else "SAFE"
+        
+        val syncEvent = buildTransactionEvent(
+            amount = numericAmount.toDouble(),
+            isCredit = false,
+            merchant = appFriendlyName,
+            category = categoryHint,
+            riskLevel = estimatedRisk,
+            notes = "Accessibility UI Detection",
+            source = "android_accessibility"
+        )
+        
+        Log.d("FinClawSync", "CANONICAL TRANSACTION EVENT GENERATED (ACCESSIBILITY):\n${syncEvent.toString(4)}")
 
         httpClient.newCall(request).enqueue(
             object : Callback {

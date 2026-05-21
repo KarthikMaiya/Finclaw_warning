@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -733,6 +734,7 @@ fun DemoButton(title: String, color: Color, modifier: Modifier = Modifier, onCli
 
 fun simulateTransaction(sharedPreferences: android.content.SharedPreferences, amount: Int, category: String) {
     val currentBalance = sharedPreferences.getInt("CURRENT_BALANCE", 0)
+    val totalBudget = sharedPreferences.getInt("TOTAL_BUDGET", 0)
     val updatedBalance = (currentBalance - amount).coerceAtLeast(0)
 
     sharedPreferences.edit {
@@ -747,6 +749,21 @@ fun simulateTransaction(sharedPreferences: android.content.SharedPreferences, am
         val existing = sharedPreferences.getString("TRANSACTION_HISTORY", "") ?: ""
         putString("TRANSACTION_HISTORY", newEntry + existing)
     }
+
+    // PHASE 1: Generate Standardized Event for Simulation
+    val estimatedRisk = if (totalBudget > 0 && amount > (totalBudget * 0.2)) "HIGH" else "SAFE"
+    val syncEvent = buildTransactionEvent(
+        amount = amount.toDouble(),
+        isCredit = false,
+        merchant = "Demo Merchant",
+        category = category,
+        riskLevel = estimatedRisk,
+        notes = "Manual Demo Simulation",
+        source = "android_manual"
+    )
+
+    // TASK 4: Log pretty JSON
+    Log.d("FinClawSync", "CANONICAL TRANSACTION EVENT GENERATED (MANUAL):\n${syncEvent.toString(4)}")
 }
 
 // ─── Analytics (Pie Chart) ────────────────────────────────────────────────────

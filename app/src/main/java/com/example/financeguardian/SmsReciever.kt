@@ -6,6 +6,56 @@ import android.content.Intent
 import android.provider.Telephony
 import android.util.Log
 import androidx.core.content.edit
+import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/**
+ * PHASE 1 — TRANSACTION EVENT STANDARDIZATION
+ * Converts parsed transaction data into canonical JSON event format.
+ * Defined at top-level for reuse in MainActivity simulation.
+ */
+fun buildTransactionEvent(
+    amount: Double,
+    isCredit: Boolean,
+    merchant: String,
+    category: String,
+    riskLevel: String,
+    notes: String,
+    source: String = "android_sms"
+): JSONObject {
+
+    val timestamp = SimpleDateFormat(
+        "yyyy-MM-dd'T'HH:mm:ss'Z'",
+        Locale.getDefault()
+    ).format(Date())
+
+    val dateOnly = SimpleDateFormat(
+        "yyyy-MM-dd",
+        Locale.getDefault()
+    ).format(Date())
+
+    // Rule: Expenses are negative, Income is positive
+    val signedAmount = if (isCredit) kotlin.math.abs(amount) else -kotlin.math.abs(amount)
+
+    val transactionObject = JSONObject().apply {
+        put("amount", signedAmount)
+        put("payee", merchant)
+        put("merchant", merchant)
+        put("categoryHint", category)
+        put("riskLevel", riskLevel)
+        put("notes", notes)
+        put("date", dateOnly)
+    }
+
+    return JSONObject().apply {
+        put("eventType", "TRANSACTION_SYNC")
+        put("source", source)
+        put("timestamp", timestamp)
+        put("transaction", transactionObject)
+    }
+}
 
 class SmsReceiver : BroadcastReceiver() {
 
@@ -53,6 +103,7 @@ class SmsReceiver : BroadcastReceiver() {
 
                             val sharedPreferences = context.getSharedPreferences("FinanceGuardian", Context.MODE_PRIVATE)
                             val currentBalance = sharedPreferences.getInt("CURRENT_BALANCE", 0)
+                            val totalBudget = sharedPreferences.getInt("TOTAL_BUDGET", 0)
 
                             // 3. Update Balance (Add if credited, else subtract)
                             val isCredit = lowerMessage.contains("credited")
@@ -75,14 +126,22 @@ class SmsReceiver : BroadcastReceiver() {
                                 else -> "Others"
                             }
 
-                            // 5. Update Category Total
+                            // 5. Risk Estimation (Simplified for Sync)
+                            var estimatedRisk = "SAFE"
+                            if (!isCredit && totalBudget > 0) {
+                                val transRatio = numericAmount.toDouble() / totalBudget.toDouble()
+                                if (transRatio > 0.2) estimatedRisk = "HIGH"
+                                else if (transRatio > 0.1) estimatedRisk = "CAUTION"
+                            }
+
+                            // 6. Update Category Total
                             val prevCatAmount = sharedPreferences.getInt(category, 0)
                             
-                            // 6. Transaction History
+                            // 7. Transaction History
                             val existingHistory = sharedPreferences.getString("TRANSACTION_HISTORY", "") ?: ""
-                            val timestamp = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date())
-                            val dateStamp = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
-                            val newTransaction = "$merchant|₹$numericAmount|$category|$timestamp|$dateStamp\n"
+                            val timeStr = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date())
+                            val dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                            val newTransaction = "$merchant|₹$numericAmount|$category|$timeStr|$dateStr\n"
 
                             sharedPreferences.edit {
                                 putInt("CURRENT_BALANCE", updatedBalance)
@@ -91,6 +150,19 @@ class SmsReceiver : BroadcastReceiver() {
                             }
 
                             Log.d("FinClawSMS", "SAVED: Balance=$updatedBalance, Category=$category, Total=${prevCatAmount + numericAmount}")
+
+                            // PHASE 1: Generate Standardized Event
+                            val syncEvent = buildTransactionEvent(
+                                amount = numericAmount.toDouble(),
+                                isCredit = isCredit,
+                                merchant = merchant,
+                                category = category,
+                                riskLevel = estimatedRisk,
+                                notes = "SMS Payment Detection"
+                            )
+
+                            // TASK 4: Log pretty JSON
+                            Log.d("FinClawSync", "CANONICAL TRANSACTION EVENT GENERATED:\n${syncEvent.toString(4)}")
 
                         } catch (e: Exception) {
                             Log.e("FinClawSMS", "ERROR: ${e.message}")
